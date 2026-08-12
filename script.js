@@ -2824,11 +2824,7 @@ function randomOauthState() {
 }
 
 function googleRedirectUri() {
-    // Must exactly match an entry under "Authorized redirect URIs" for this
-    // Client ID in Google Cloud Console — using origin only (no path/slash)
-    // keeps this a stable, single value regardless of which page the user
-    // clicked Sign In from.
-    return window.location.origin;
+    return window.location.origin + window.location.pathname;
 }
 
 function buildGoogleAuthUrl(state) {
