@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PopcornNight — Find Your Perfect Movie</title>
+
+    <meta name="theme-color" content="#0c0417">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PopcornNight">
+
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><defs><linearGradient id='bg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%23170a2c'/><stop offset='100%25' stop-color='%232d0a4e'/></linearGradient><linearGradient id='p' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%23ff6fb0'/><stop offset='100%25' stop-color='%23ff2e88'/></linearGradient><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%23ffe27a'/><stop offset='100%25' stop-color='%23ffd23f'/></linearGradient></defs><rect width='512' height='512' rx='112' fill='url(%23bg)'/><g transform='translate(96, 120)'><g transform='rotate(-18, 0, 80)'><rect x='0' y='0' width='320' height='52' rx='8' fill='%23170a2c' stroke='url(%23p)' stroke-width='4'/><polygon points='40,0 75,0 45,52 10,52' fill='url(%23g)'/><polygon points='120,0 155,0 125,52 90,52' fill='url(%23g)'/><polygon points='200,0 235,0 205,52 170,52' fill='url(%23g)'/><polygon points='280,0 315,0 285,52 250,52' fill='url(%23g)'/></g><rect x='0' y='70' width='320' height='200' rx='16' fill='url(%23bg)' stroke='url(%23p)' stroke-width='5'/><rect x='0' y='70' width='320' height='42' rx='6' fill='%23170a2c'/><polygon points='40,70 75,70 45,112 10,112' fill='url(%23g)'/><polygon points='120,70 155,70 125,112 90,112' fill='url(%23g)'/><polygon points='200,70 235,70 205,112 170,112' fill='url(%23g)'/><polygon points='280,70 315,70 285,112 250,112' fill='url(%23g)'/><path d='M160 135 L173 162 L202 166 L181 187 L186 216 L160 202 L134 216 L139 187 L118 166 L147 162 Z' fill='url(%23g)'/></g></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><defs><linearGradient id='bg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%23170a2c'/><stop offset='100%25' stop-color='%232d0a4e'/></linearGradient><linearGradient id='p' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%23ff6fb0'/><stop offset='100%25' stop-color='%23ff2e88'/></linearGradient><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%23ffe27a'/><stop offset='100%25' stop-color='%23ffd23f'/></linearGradient></defs><rect width='512' height='512' rx='112' fill='url(%23bg)'/><g transform='translate(96, 120)'><g transform='rotate(-18, 0, 80)'><rect x='0' y='0' width='320' height='52' rx='8' fill='%23170a2c' stroke='url(%23p)' stroke-width='4'/><polygon points='40,0 75,0 45,52 10,52' fill='url(%23g)'/><polygon points='120,0 155,0 125,52 90,52' fill='url(%23g)'/><polygon points='200,0 235,0 205,52 170,52' fill='url(%23g)'/><polygon points='280,0 315,0 285,52 250,52' fill='url(%23g)'/></g><rect x='0' y='70' width='320' height='200' rx='16' fill='url(%23bg)' stroke='url(%23p)' stroke-width='5'/><rect x='0' y='70' width='320' height='42' rx='6' fill='%23170a2c'/><polygon points='40,70 75,70 45,112 10,112' fill='url(%23g)'/><polygon points='120,70 155,70 125,112 90,112' fill='url(%23g)'/><polygon points='200,70 235,70 205,112 170,112' fill='url(%23g)'/><polygon points='280,70 315,70 285,112 250,112' fill='url(%23g)'/><path d='M160 135 L173 162 L202 166 L181 187 L186 216 L160 202 L134 216 L139 187 L118 166 L147 162 Z' fill='url(%23g)'/></g></svg>">
+    
+    <link rel="manifest" href="data:application/manifest+json;charset=utf-8,%7B%22name%22%3A%20%22PopcornNight%20%E2%80%94%20Movie%20Matcher%22%2C%20%22short_name%22%3A%20%22PopcornNight%22%2C%20%22start_url%22%3A%20%22.%22%2C%20%22display%22%3A%20%22standalone%22%2C%20%22background_color%22%3A%20%22%230c0417%22%2C%20%22theme_color%22%3A%20%22%230c0417%22%2C%20%22icons%22%3A%20%5B%7B%22src%22%3A%20%22data%3Aimage%2Fsvg%2Bxml%3Butf8%2C%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20512%20512%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27bg%27%20x1%3D%270%2525%27%20y1%3D%270%2525%27%20x2%3D%27100%2525%27%20y2%3D%27100%2525%27%3E%3Cstop%20offset%3D%270%2525%27%20stop-color%3D%27%2523170a2c%27%2F%3E%3Cstop%20offset%3D%27100%2525%27%20stop-color%3D%27%25232d0a4e%27%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%27p%27%20x1%3D%270%2525%27%20y1%3D%270%2525%27%20x2%3D%27100%2525%27%20y2%3D%27100%2525%27%3E%3Cstop%20offset%3D%270%2525%27%20stop-color%3D%27%2523ff6fb0%27%2F%3E%3Cstop%20offset%3D%27100%2525%27%20stop-color%3D%27%2523ff2e88%27%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%2525%27%20y1%3D%270%2525%27%20x2%3D%27100%2525%27%20y2%3D%27100%2525%27%3E%3Cstop%20offset%3D%270%2525%27%20stop-color%3D%27%2523ffe27a%27%2F%3E%3Cstop%20offset%3D%27100%2525%27%20stop-color%3D%27%2523ffd23f%27%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%27512%27%20height%3D%27512%27%20rx%3D%27112%27%20fill%3D%27url%28%2523bg%29%27%2F%3E%3Cg%20transform%3D%27translate%2896%2C%20120%29%27%3E%3Cg%20transform%3D%27rotate%28-18%2C%200%2C%2080%29%27%3E%3Crect%20x%3D%270%27%20y%3D%270%27%20width%3D%27320%27%20height%3D%2752%27%20rx%3D%278%27%20fill%3D%27%2523170a2c%27%20stroke%3D%27url%28%2523p%29%27%20stroke-width%3D%274%27%2F%3E%3Cpolygon%20points%3D%2740%2C0%2075%2C0%2045%2C52%2010%2C52%27%20fill%3D%27url%28%2523g%29%27%2F%3E%3Cpolygon%20points%3D%27120%2C0%20155%2C0%20125%2C52%2090%2C52%27%20fill%3D%27url%28%2523g%29%27%2F%3E%3Cpolygon%20points%3D%27200%2C0%20235%2C0%20205%2C52%20170%2C52%27%20fill%3D%27url%28%2523g%29%27%2F%3E%3Cpolygon%20points%3D%27280%2C0%20315%2C0%20285%2C52%20250%2C52%27%20fill%3D%27url%28%2523g%29%27%2F%3E%3C%2Fg%3E%3Crect%20x%3D%270%27%20y%3D%2770%27%20width%3D%27320%27%20height%3D%27200%27%20rx%3D%2716%27%20fill%3D%27url%28%2523bg%29%27%20stroke%3D%27url%28%2523p%29%27%20stroke-width%3D%275%27%2F%3E%3Crect%20x%3D%270%27%20y%3D%2770%27%20width%3D%27320%27%20height%3D%2742%27%20rx%3D%276%27%20fill%3D%27%2523170a2c%27%2F%3E%3Cpolygon%20points%3D%2740%2C70%2075%2C70%2045%2C112%2010%2C112%27%20fill%3D%27url%28%2523g%29%27%2F%3E%3Cpolygon%20points%3D%27120%2C70%20155%2C70%20125%2C112%2090%2C112%27%20fill%3D%27url%28%2523g%29%27%2F%3E%3Cpolygon%20points%3D%27200%2C70%20235%2C70%20205%2C112%20170%2C112%27%20fill%3D%27url%28%2523g%29%27%2F%3E%3Cpolygon%20points%3D%27280%2C70%20315%2C70%20285%2C112%20250%2C112%27%20fill%3D%27url%28%2523g%29%27%2F%3E%3Cpath%20d%3D%27M160%20135%20L173%20162%20L202%20166%20L181%20187%20L186%20216%20L160%20202%20L134%20216%20L139%20187%20L118%20166%20L147%20162%20Z%27%20fill%3D%27url%28%2523g%29%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E%22%2C%20%22sizes%22%3A%20%22512x512%22%2C%20%22type%22%3A%20%22image%2Fsvg%2Bxml%22%2C%20%22purpose%22%3A%20%22any%20maskable%22%7D%5D%7D">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@500&family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="stage-glow" aria-hidden="true"></div>
+    <div class="poster-rail poster-rail-left" aria-hidden="true"><div class="poster-rail-track" id="poster-rail-left-track"></div></div>
+    <div class="poster-rail poster-rail-right" aria-hidden="true"><div class="poster-rail-track" id="poster-rail-right-track"></div></div>
+    <div class="film-grain" aria-hidden="true"></div>
+
+    <div class="brand-logo-center" aria-hidden="true">
+        <span class="brand-logo-mark">🍿</span>
+        <span class="brand-logo-text">PopcornNight.ai</span>
+    </div>
+
+    <div class="top-left-actions">
+        <button id="home-btn" class="nav-btn home-btn hidden" aria-label="Home">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            </svg>
+        </button>
+    </div>
+
+    <div class="top-right-actions">
+        <div class="search-container" id="search-container">
+            <button id="search-toggle-btn" class="nav-btn" aria-label="Search">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+            </button>
+            <div id="search-panel" class="search-panel hidden">
+                <div class="search-input-row">
+                    <input type="text" id="movie-search-input" placeholder="Search movies..." autocomplete="off">
+                    <button id="search-clear-btn" class="search-clear-btn hidden" aria-label="Clear search" title="Clear">✕</button>
+                </div>
+                <div id="search-results" class="search-results hidden"></div>
+            </div>
+        </div>
+
+        <button id="trending-btn" class="nav-btn" aria-label="Trending movies" title="Trending">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                <polyline points="17 6 23 6 23 12"></polyline>
+            </svg>
+        </button>
+
+        <button id="theaters-btn" class="nav-btn" aria-label="In theaters near you" title="In Theaters">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="7" width="20" height="14" rx="2"></rect>
+                <path d="M2 7l4.5-5h11L22 7"></path>
+                <line x1="12" y1="7" x2="12" y2="21"></line>
+            </svg>
+        </button>
+
+        <button id="upcoming-btn" class="nav-btn" aria-label="Upcoming movies in next 30 days" title="Upcoming (Next 30 Days)">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+                <line x1="12" y1="14" x2="12" y2="18"></line>
+                <line x1="10" y1="16" x2="14" y2="16"></line>
+            </svg>
+        </button>
+
+        <button id="wishlist-btn" class="nav-btn" aria-label="My wishlist" title="My Wishlist">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"></path>
+            </svg>
+            <span id="wishlist-count-badge" class="wishlist-count-badge hidden">0</span>
+        </button>
+
+        <button id="settings-btn" class="nav-btn" aria-label="Settings" title="Settings">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+        </button>
+
+        <div class="account-area" id="account-area">
+            <button id="google-signin-btn" class="nav-btn google-signin-btn" aria-label="Sign in with Google" title="Sign in with Google">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.24 1.35-1.7 3.96-5.5 3.96-3.31 0-6.02-2.74-6.02-6.12s2.7-6.12 6.02-6.12c1.89 0 3.15.8 3.88 1.5l2.65-2.55C16.9 2.98 14.68 2 12 2 6.98 2 2.9 6.03 2.9 11.06S6.98 20.1 12 20.1c6.93 0 9.4-4.86 9.4-7.38 0-.5-.06-.87-.12-1.24H12z"></path>
+                </svg>
+                <span id="google-signin-btn-text">Sign In</span>
+            </button>
+
+            <div id="user-menu-wrap" class="user-menu-wrap hidden">
+                <button id="user-avatar-btn" class="user-avatar-btn" aria-label="Account menu">
+                    <img id="user-avatar-img" src="" alt="">
+                </button>
+                <div id="user-dropdown" class="user-dropdown hidden">
+                    <div class="user-dropdown-info">
+                        <span id="user-dropdown-name" class="user-dropdown-name"></span>
+                        <span id="user-dropdown-email" class="user-dropdown-email"></span>
+                    </div>
+                    <button id="user-dropdown-wishlist-btn" class="user-dropdown-item">💖 My Wishlist</button>
+                    <button id="user-sign-out-btn" class="user-dropdown-item user-sign-out-btn">🚪 Sign Out</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="marquee-lights top" aria-hidden="true"></div>
+
+        <div id="start-screen" class="screen">
+            <p class="eyebrow" id="start-eyebrow">🎬 Now Screening</p>
+            <h1 id="start-title">🎬 What's The Move Tonight?</h1>
+            <p id="start-subtitle">Bored? Vibing? Emotionally unstable? 😭<br>Answer a few questions and let us cook your perfect movie pick.</p>
+
+            <div id="film-reel-strip" class="film-reel-strip" aria-hidden="true">
+                <div id="film-reel-track" class="film-reel-track"></div>
+            </div>
+
+            <div class="start-actions">
+                <button id="start-btn" class="btn ticket-btn">Let's Cook 🔥</button>
+                <button id="random-btn" class="btn secondary wildcard-btn">Random Drop 🎲</button>
+            </div>
+
+            <div id="resume-chip" class="resume-chip hidden">
+                <img id="resume-chip-poster" class="resume-chip-poster" src="" alt="">
+                <div class="resume-chip-text">
+                    <span class="resume-chip-label">Continue with</span>
+                    <span id="resume-chip-title" class="resume-chip-title"></span>
+                </div>
+                <span class="resume-chip-arrow">→</span>
+            </div>
+
+            <div id="home-quick-chips" class="home-quick-chips">
+                <button class="home-chip" id="chip-trending" data-mode="trending">🔥 Trending</button>
+                <button class="home-chip" id="chip-theaters" data-mode="theaters">🎟️ In Theaters</button>
+                <button class="home-chip" id="chip-upcoming" data-mode="upcoming">📅 Coming Soon</button>
+                <button class="home-chip" id="chip-wishlist" data-mode="wishlist">💖 Wishlist</button>
+            </div>
+
+            <div id="home-trending-section" class="home-trending-section hidden">
+                <div class="home-trending-heading">🔥 Trending Right Now</div>
+                <div id="home-trending-strip" class="home-trending-strip"></div>
+            </div>
+        </div>
+
+        <div id="quiz-screen" class="screen hidden">
+            <div class="reel-bar-container">
+                <div id="progress-bar" class="reel-bar"></div>
+            </div>
+            <div class="quiz-header-row">
+                <button id="back-btn" class="ghost-btn hidden">← Back</button>
+                <span id="question-counter">Question 1 of 5</span>
+            </div>
+            <h2 id="question-text">Question goes here?</h2>
+            <p id="question-hint" class="question-hint hidden"></p>
+            <div id="options-container"></div>
+            
+            <div id="quiz-footer" class="quiz-footer hidden">
+                <button id="continue-btn" class="btn ticket-btn">Bet, Continue →</button>
+            </div>
+        </div>
+
+        <div id="reveal-screen" class="screen hidden">
+            <div id="reveal-backdrop" aria-hidden="true"></div>
+
+            <div id="clapperboard-container" class="hidden">
+                <div class="clapperboard" id="clapperboard">
+                    <div class="clap-top">
+                        <span class="clap-stripe"></span>
+                        <span class="clap-stripe"></span>
+                        <span class="clap-stripe"></span>
+                        <span class="clap-stripe"></span>
+                        <span class="clap-stripe"></span>
+                    </div>
+                    <div class="clap-bottom">
+                        <span class="clap-text">POPCORNNIGHT</span>
+                        <span class="clap-scene">TAKE: 01</span>
+                    </div>
+                </div>
+                <p id="clapperboard-text">🎬 Lights. Camera. Vibe check...</p>
+            </div>
+
+            <div id="movie-result" class="hidden">
+                <div class="movie-card" id="movie-card">
+                    <div class="poster-wrap">
+                        <img id="movie-poster" src="" alt="Movie Poster" loading="lazy" decoding="async">
+                        <div class="poster-shade" aria-hidden="true"></div>
+                        <span id="movie-rating" class="rating-badge">⭐ 8.5</span>
+                        <button id="share-btn" class="poster-share-btn" aria-label="Share">
+                            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <circle cx="18" cy="5" r="3"></circle>
+                                <circle cx="6" cy="12" r="3"></circle>
+                                <circle cx="18" cy="19" r="3"></circle>
+                                <line x1="8.6" y1="10.6" x2="15.4" y2="6.4"></line>
+                                <line x1="8.6" y1="13.4" x2="15.4" y2="17.6"></line>
+                            </svg>
+                        </button>
+                        <button id="movie-wishlist-btn" class="poster-wishlist-btn" aria-label="Save to wishlist" title="Save to wishlist">
+                            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"></path>
+                            </svg>
+                        </button>
+                        <button id="movie-explain-btn" class="poster-explain-btn" aria-label="Explain this movie">
+                            <span class="explain-btn-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M11 5 6 9H2v6h4l5 4V5z"></path>
+                                    <path d="M15.5 8.5a5 5 0 0 1 0 7"></path>
+                                    <path d="M18.5 6a9 9 0 0 1 0 12"></path>
+                                </svg>
+                            </span>
+                            <span id="movie-explain-btn-text" class="explain-btn-text">Explain</span>
+                        </button>
+                        <button id="movie-chat-fab" class="movie-chat-fab" aria-label="Ask AI about this movie" title="Ask AI">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                            </svg>
+                            <span class="chat-fab-ping" aria-hidden="true"></span>
+                        </button>
+                    </div>
+                    <button id="next-movie-btn" class="skip-fab" aria-label="Skip to next movie" title="Skip">✕</button>
+                    <div class="movie-info">
+                        <h3 id="movie-title">Movie Title</h3>
+                        <div class="movie-meta">
+                            <span id="movie-year" class="meta-pill hidden"></span>
+                            <span id="movie-runtime" class="meta-pill hidden"></span>
+                        </div>
+                        <div id="movie-genres" class="genre-row"></div>
+                        <p id="movie-overview">Movie description will go here...</p>
+
+                        <div class="links-row">
+                            <a id="trailer-link" class="trailer-link hidden" href="#" target="_blank" rel="noopener">▶ Watch Trailer</a>
+                            <a id="youtube-free-link" class="youtube-free-link hidden" href="#" target="_blank" rel="noopener">🎬 Find Free on YouTube</a>
+                        </div>
+
+                        <div id="free-section" class="platform-section hidden">
+                            <span class="platform-label" id="free-label">Free to watch</span>
+                            <div id="free-platforms" class="platform-row"></div>
+                        </div>
+
+                        <div id="platforms-section" class="platform-section hidden">
+                            <span class="platform-label" id="platforms-label">Streaming on</span>
+                            <div id="streaming-platforms" class="platform-row"></div>
+                        </div>
+
+                        <p id="streaming-none" class="streaming-none hidden">Not currently streaming</p>
+                    </div>
+                </div>
+                <p id="swipe-hint" class="swipe-hint">👈 Swipe the poster left or right for another pick</p>
+                <p id="movie-error" class="error-message hidden"></p>
+                <div class="button-group">
+                    <button id="broaden-btn" class="btn secondary hidden">🔍 Broaden Search</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="browse-screen" class="screen hidden">
+            <div class="quiz-header-row">
+                <button id="browse-back-btn" class="ghost-btn">← Back</button>
+                <span id="browse-title" class="browse-title-tag"></span>
+                <div id="location-info" class="location-info hidden">
+                    <span id="location-display" class="location-display hidden"></span>
+                    <button id="location-change-btn" class="ghost-btn location-change-btn">
+                        <svg class="pin-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 21s-7-7.05-7-12a7 7 0 0 1 14 0c0 4.95-7 12-7 12z"></path>
+                            <circle cx="12" cy="9" r="2.4"></circle>
+                        </svg>
+                        <span id="location-change-btn-text"></span>
+                    </button>
+                </div>
+            </div>
+            <h2 id="browse-heading">🔥 Trending Now</h2>
+            <div id="browse-grid" class="browse-grid"></div>
+            <p id="browse-loading" class="browse-loading hidden">Rounding up the picks…</p>
+            <p id="browse-error" class="error-message hidden"></p>
+        </div>
+
+        <div class="marquee-lights bottom" aria-hidden="true"></div>
+
+        <footer class="site-footer">Designed and developed by <span class="footer-brand">EnginX</span> · © 2026</footer>
+    </div>
+
+    <div id="trailer-modal" class="trailer-modal hidden">
+        <div class="trailer-modal-backdrop" id="trailer-modal-backdrop"></div>
+        <div class="trailer-modal-box">
+            <button id="trailer-modal-close" class="trailer-modal-close" aria-label="Close trailer">✕</button>
+            <div class="trailer-modal-frame" id="trailer-modal-frame"></div>
+            <a id="trailer-fallback-link" class="trailer-fallback-link hidden" href="#" target="_blank" rel="noopener">Having trouble playing it? ▶ Watch on YouTube</a>
+        </div>
+    </div>
+
+    <div id="share-menu" class="share-menu hidden">
+        <div class="share-menu-backdrop" id="share-menu-backdrop"></div>
+        <div class="share-menu-box">
+            <p class="share-menu-title">Share this pick</p>
+            <div class="share-menu-options">
+                <button id="share-whatsapp-btn" class="share-menu-item" aria-label="Share on WhatsApp">
+                    <span class="share-menu-icon whatsapp-icon">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M17.47 14.38c-.3-.15-1.77-.87-2.04-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.48-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.87 1.22 3.07c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.62.71.23 1.36.2 1.87.12.57-.08 1.77-.72 2.02-1.42.25-.7.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35z"/><path d="M12.02 2C6.5 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.06-1.33A9.94 9.94 0 0012.02 22C17.5 22 22 17.52 22 12S17.5 2 12.02 2zm0 18.2a8.2 8.2 0 01-4.18-1.15l-.3-.18-3 .79.8-2.93-.2-.3A8.2 8.2 0 013.8 12c0-4.53 3.69-8.2 8.22-8.2 4.53 0 8.2 3.67 8.2 8.2 0 4.53-3.67 8.2-8.2 8.2z"/></svg>
+                    </span>
+                    <span>WhatsApp</span>
+                </button>
+                <button id="share-instagram-btn" class="share-menu-item" aria-label="Share on Instagram">
+                    <span class="share-menu-icon instagram-icon">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.3" cy="6.7" r="1"/></svg>
+                    </span>
+                    <span>Instagram</span>
+                </button>
+                <button id="share-copy-btn" class="share-menu-item" aria-label="Copy link">
+                    <span class="share-menu-icon copy-icon">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    </span>
+                    <span>Copy Link</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="share-toast" class="share-toast hidden"></div>
+
+    <div id="movie-chat-modal" class="movie-chat-modal hidden">
+        <div class="movie-chat-backdrop" id="movie-chat-backdrop"></div>
+        <div class="movie-chat-box">
+            <div class="movie-chat-header">
+                <div class="movie-chat-header-info">
+                    <span class="movie-chat-bot-icon" aria-hidden="true">🤖</span>
+                    <div class="movie-chat-header-text">
+                        <span class="movie-chat-title">Ask about a movie</span>
+                        <span id="movie-chat-subtitle" class="movie-chat-subtitle"></span>
+                    </div>
+                </div>
+                <button id="movie-chat-close" class="trailer-modal-close" aria-label="Close chat">✕</button>
+            </div>
+            <div id="movie-chat-messages" class="movie-chat-messages"></div>
+            <form id="movie-chat-form" class="movie-chat-input-row">
+                <input type="text" id="movie-chat-input" class="movie-chat-input" placeholder="Ask anything about this movie..." autocomplete="off">
+                <button type="submit" id="movie-chat-send" class="movie-chat-send-btn" aria-label="Send">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="settings-modal hidden">
+        <div class="settings-modal-backdrop" id="settings-modal-backdrop"></div>
+        <div class="settings-modal-box">
+            <button id="settings-modal-close" class="trailer-modal-close" aria-label="Close">✕</button>
+            <h3 id="settings-modal-title" class="settings-modal-title">⚙️ Settings</h3>
+            <div class="settings-row">
+                <span id="settings-language-label" class="settings-row-label">Language</span>
+                <select id="lang-select" class="settings-lang-select" aria-label="Language">
+                    <option value="en">English</option>
+                    <option value="hi">हिन्दी</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div id="location-modal" class="location-modal hidden">
+        <div class="location-modal-backdrop" id="location-modal-backdrop"></div>
+        <div class="location-modal-box">
+            <button id="location-modal-close" class="trailer-modal-close" aria-label="Close">✕</button>
+            <div class="location-modal-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 21s-7.2-7.2-7.2-12.3a7.2 7.2 0 0 1 14.4 0C19.2 13.8 12 21 12 21z"></path>
+                    <circle cx="12" cy="8.7" r="2.7"></circle>
+                </svg>
+            </div>
+            <h3 id="location-modal-title" class="location-modal-title">Set Your Location</h3>
+            <p id="location-modal-desc" class="location-modal-desc">We couldn't detect your location automatically. Pick your country to see what's playing near you.</p>
+            <select id="location-country-select" class="location-country-select"></select>
+            <button id="location-confirm-btn" class="btn ticket-btn location-confirm-btn">Show Theaters 🎟️</button>
+            <button id="location-retry-btn" class="ghost-btn location-retry-btn">📍 Try automatic detection again</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
