@@ -23,6 +23,8 @@
 </head>
 <body>
 
+    <div id="mobile-hero-backdrop-a" class="mobile-hero-backdrop" aria-hidden="true"></div>
+    <div id="mobile-hero-backdrop-b" class="mobile-hero-backdrop" aria-hidden="true"></div>
     <div class="stage-glow" aria-hidden="true"></div>
     <div class="poster-rail poster-rail-left" aria-hidden="true"><div class="poster-rail-track" id="poster-rail-left-track"></div></div>
     <div class="poster-rail poster-rail-right" aria-hidden="true"><div class="poster-rail-track" id="poster-rail-right-track"></div></div>
@@ -40,7 +42,21 @@
                 <polyline points="9 22 9 12 15 12 15 22"></polyline>
             </svg>
         </button>
+        <button id="cinema-mode-btn" class="nav-btn cinema-mode-btn" aria-label="Cinema mode" title="Cinema Mode">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.2" y1="4.2" x2="5.6" y2="5.6"></line>
+                <line x1="18.4" y1="18.4" x2="19.8" y2="19.8"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.2" y1="19.8" x2="5.6" y2="18.4"></line>
+                <line x1="18.4" y1="5.6" x2="19.8" y2="4.2"></line>
+            </svg>
+        </button>
     </div>
+    <div id="cinema-mode-overlay" class="cinema-mode-overlay hidden" aria-hidden="true"></div>
 
     <div class="top-right-actions">
         <div class="search-container" id="search-container">
@@ -149,11 +165,29 @@
                 <span class="resume-chip-arrow">→</span>
             </div>
 
+            <div id="mood-box" class="mood-box">
+                <span class="mood-box-icon" aria-hidden="true">✨</span>
+                <input type="text" id="mood-input" class="mood-input" placeholder="I feel like something slow and heartbreaking..." autocomplete="off">
+                <button id="mood-submit-btn" class="mood-submit-btn" aria-label="Find a movie for this mood">Find it →</button>
+            </div>
+            <p id="mood-error" class="mood-error hidden"></p>
+
             <div id="home-quick-chips" class="home-quick-chips">
                 <button class="home-chip" id="chip-trending" data-mode="trending">🔥 Trending</button>
                 <button class="home-chip" id="chip-theaters" data-mode="theaters">🎟️ In Theaters</button>
                 <button class="home-chip" id="chip-upcoming" data-mode="upcoming">📅 Coming Soon</button>
                 <button class="home-chip" id="chip-wishlist" data-mode="wishlist">💖 Wishlist</button>
+                <button class="home-chip" id="chip-watchparty" data-mode="watchparty">🎉 Watch Party</button>
+            </div>
+
+            <div id="ott-select-section" class="ott-select-section">
+                <div class="ott-select-heading" id="ott-select-heading">📺 What do you have?</div>
+                <div id="ott-chip-row" class="ott-chip-row"></div>
+            </div>
+
+            <div id="home-recently-viewed-section" class="home-trending-section hidden">
+                <div class="home-trending-heading" id="home-recent-heading">🕓 Recently Viewed</div>
+                <div id="home-recent-strip" class="home-trending-strip"></div>
             </div>
 
             <div id="home-trending-section" class="home-trending-section hidden">
@@ -200,10 +234,15 @@
             </div>
 
             <div id="movie-result" class="hidden">
+                <div class="card-stack-ghost card-stack-ghost-2" aria-hidden="true"></div>
+                <div class="card-stack-ghost card-stack-ghost-1" aria-hidden="true"></div>
                 <div class="movie-card" id="movie-card">
                     <div class="poster-wrap">
-                        <img id="movie-poster" src="" alt="Movie Poster" loading="lazy" decoding="async">
+                        <img id="movie-poster" src="" alt="Movie Poster" loading="lazy" decoding="async" crossorigin="anonymous">
                         <div class="poster-shade" aria-hidden="true"></div>
+                        <div id="explain-waveform" class="explain-waveform hidden" aria-hidden="true">
+                            <span></span><span></span><span></span><span></span><span></span>
+                        </div>
                         <span id="movie-rating" class="rating-badge">⭐ 8.5</span>
                         <button id="share-btn" class="poster-share-btn" aria-label="Share">
                             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -244,11 +283,13 @@
                             <span id="movie-runtime" class="meta-pill hidden"></span>
                         </div>
                         <div id="movie-genres" class="genre-row"></div>
+                        <p id="why-youll-like-badge" class="why-youll-like-badge hidden"></p>
                         <p id="movie-overview">Movie description will go here...</p>
 
                         <div class="links-row">
                             <a id="trailer-link" class="trailer-link hidden" href="#" target="_blank" rel="noopener">▶ Watch Trailer</a>
                             <a id="youtube-free-link" class="youtube-free-link hidden" href="#" target="_blank" rel="noopener">🎬 Find Free on YouTube</a>
+                            <a id="ticket-affiliate-link" class="ticket-affiliate-link hidden" href="#" target="_blank" rel="noopener sponsored">🎟️ Book Tickets</a>
                         </div>
 
                         <div id="free-section" class="platform-section hidden">
@@ -349,8 +390,27 @@
                 </div>
                 <button id="movie-chat-close" class="trailer-modal-close" aria-label="Close chat">✕</button>
             </div>
+            <div class="movie-chat-toolbar">
+                <div class="persona-toggle" id="persona-toggle" role="group" aria-label="Explain style">
+                    <button type="button" class="persona-toggle-btn active" id="persona-eli5-btn" data-persona="eli5">🧒 ELI5</button>
+                    <button type="button" class="persona-toggle-btn" id="persona-critic-btn" data-persona="critic">🎓 Critic</button>
+                </div>
+                <label class="spoiler-toggle" id="spoiler-toggle-wrap">
+                    <input type="checkbox" id="spoiler-toggle-input">
+                    <span class="spoiler-toggle-track"><span class="spoiler-toggle-thumb"></span></span>
+                    <span class="spoiler-toggle-label" id="spoiler-toggle-label">Spoiler-safe</span>
+                </label>
+                <button type="button" id="compare-mode-btn" class="compare-mode-btn" title="Compare with another movie">⚖️ Compare</button>
+            </div>
             <div id="movie-chat-messages" class="movie-chat-messages"></div>
             <form id="movie-chat-form" class="movie-chat-input-row">
+                <button type="button" id="movie-chat-mic-btn" class="movie-chat-mic-btn" aria-label="Speak your question" title="Voice input">
+                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="9" y="2" width="6" height="12" rx="3"></rect>
+                        <path d="M5 10a7 7 0 0 0 14 0"></path>
+                        <line x1="12" y1="17" x2="12" y2="22"></line>
+                    </svg>
+                </button>
                 <input type="text" id="movie-chat-input" class="movie-chat-input" placeholder="Ask anything about this movie..." autocomplete="off">
                 <button type="submit" id="movie-chat-send" class="movie-chat-send-btn" aria-label="Send">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -359,6 +419,36 @@
                     </svg>
                 </button>
             </form>
+        </div>
+    </div>
+
+    <div id="compare-modal" class="settings-modal hidden">
+        <div class="settings-modal-backdrop" id="compare-modal-backdrop"></div>
+        <div class="settings-modal-box compare-modal-box">
+            <button id="compare-modal-close" class="trailer-modal-close" aria-label="Close">✕</button>
+            <h3 class="settings-modal-title">⚖️ Compare Two Movies</h3>
+            <p class="compare-modal-desc">Currently viewing: <span id="compare-current-title"></span></p>
+            <input type="text" id="compare-input" class="mood-input compare-input" placeholder="What should I compare it with? e.g. Interstellar" autocomplete="off">
+            <button id="compare-submit-btn" class="btn ticket-btn compare-submit-btn">Compare 🎬</button>
+        </div>
+    </div>
+
+    <div id="watchparty-modal" class="settings-modal hidden">
+        <div class="settings-modal-backdrop" id="watchparty-modal-backdrop"></div>
+        <div class="settings-modal-box watchparty-modal-box">
+            <button id="watchparty-modal-close" class="trailer-modal-close" aria-label="Close">✕</button>
+            <h3 class="settings-modal-title">🎉 Watch Party Mode</h3>
+            <div id="watchparty-setup" class="watchparty-setup">
+                <p class="watchparty-desc">Answer a few quick taste questions each, and we'll merge both picks into one recommendation. Perfect for movie night with a friend — pass the device back and forth.</p>
+                <div id="watchparty-room-row" class="watchparty-room-row">
+                    <span class="watchparty-room-label">Room Code</span>
+                    <span id="watchparty-room-code" class="watchparty-room-code">------</span>
+                    <button id="watchparty-copy-btn" class="ghost-btn" type="button">Copy Link</button>
+                </div>
+                <div id="watchparty-questions" class="watchparty-questions"></div>
+                <button id="watchparty-next-btn" class="btn ticket-btn watchparty-next-btn">Continue →</button>
+            </div>
+            <div id="watchparty-result" class="watchparty-result hidden"></div>
         </div>
     </div>
 
@@ -373,6 +463,13 @@
                     <option value="en">English</option>
                     <option value="hi">हिन्दी</option>
                 </select>
+            </div>
+            <div class="settings-row">
+                <span id="settings-notif-label" class="settings-row-label">Notifications</span>
+                <label class="spoiler-toggle" id="notif-toggle-wrap">
+                    <input type="checkbox" id="notif-toggle-input">
+                    <span class="spoiler-toggle-track"><span class="spoiler-toggle-thumb"></span></span>
+                </label>
             </div>
         </div>
     </div>
@@ -396,5 +493,12 @@
     </div>
 
     <script src="script.js"></script>
+    <script>
+        if ("serviceWorker" in navigator) {
+            window.addEventListener("load", () => {
+                navigator.serviceWorker.register("sw.js").catch(() => {});
+            });
+        }
+    </script>
 </body>
 </html>

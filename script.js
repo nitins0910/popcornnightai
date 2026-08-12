@@ -168,7 +168,14 @@ function buildAiPrompt() {
         .map((h, i) => `Q${i + 1}: ${h.question}\nUser answered: ${h.answer}`)
         .join("\n");
 
-    return `You are "Reel", a fun, witty movie-recommendation quizmaster inside a movie app called PopcornNight.
+    const ottNames = (typeof getSelectedOtt === "function" ? getSelectedOtt() : [])
+        .map((id) => (OTT_PROVIDERS.find((p) => p.id === id) || {}).name)
+        .filter(Boolean);
+    const ottLine = ottNames.length
+        ? `\n\nThe user has told the app they subscribe to: ${ottNames.join(", ")}. Where reasonable, lean slightly toward movies likely available on these services, but never sacrifice a genuinely great match just to fit this.`
+        : "";
+
+    return `You are "Reel", a fun, witty movie-recommendation quizmaster inside a movie app called PopcornNight.${ottLine}
 
 Ask the user short, engaging questions, one at a time, to figure out what movie they should watch tonight. Usually ${AI_TYPICAL_QUESTIONS} questions is enough, but if their answers are vague, contradictory, or you genuinely need more detail to nail a great pick, you may ask up to ${AI_MAX_QUESTIONS} questions total — never more than that. Across the questions, try to naturally cover: which film industry they're in the mood for (Hollywood / Bollywood / South Indian / no preference), genre, era/decade, what mood or feeling they want (laugh, cry, thrill, relax, scare, etc.), and anything they'd like to avoid. Keep the tone casual and fun, like a friend hyping them up for movie night.
 
@@ -430,7 +437,31 @@ const TRANSLATIONS = {
         chip_wishlist: "💖 Wishlist",
         home_trending_heading: "🔥 Trending Right Now",
         settings_title: "⚙️ Settings",
-        settings_language_label: "Language"
+        settings_language_label: "Language",
+        chip_watchparty: "🎉 Watch Party",
+        settings_notif_label: "Notifications",
+        mood_placeholder: "I feel like something slow and heartbreaking...",
+        mood_submit_btn: "Find it →",
+        mood_error: "Couldn't quite place that mood — try describing it a bit differently.",
+        recent_heading: "🕓 Recently Viewed",
+        ott_heading: "📺 What do you have?",
+        spoiler_toggle_label: "Spoiler-safe",
+        explain_loading_eli5: "Preparing (simple)...",
+        explain_loading_critic: "Preparing (critic)...",
+        compare_desc: "Currently viewing:",
+        compare_placeholder: "What should I compare it with? e.g. Interstellar",
+        compare_btn: "Compare 🎬",
+        watchparty_desc: "Answer a few quick taste questions each, and we'll merge both picks into one recommendation. Perfect for movie night with a friend — pass the device back and forth.",
+        watchparty_room_label: "Room Code",
+        watchparty_copy_btn: "Copy Link",
+        watchparty_continue_btn: "Continue →",
+        watchparty_player_a: "Player 1's turn",
+        watchparty_player_b: "Player 2's turn",
+        watchparty_finding: "Finding a movie you'll both like...",
+        ticket_affiliate_btn: "🎟️ Book Tickets",
+        notif_enabled_toast: "Notifications on 🔔",
+        offline_toast: "You're offline — showing cached content where possible.",
+        why_youll_like_prefix: "💡 Because you liked"
     },
     hi: {
         app_title: "🎬 आज रात देखना क्या है?",
@@ -566,7 +597,31 @@ const TRANSLATIONS = {
         chip_wishlist: "💖 विशलिस्ट",
         home_trending_heading: "🔥 अभी ट्रेंडिंग में",
         settings_title: "⚙️ सेटिंग्स",
-        settings_language_label: "भाषा"
+        settings_language_label: "भाषा",
+        chip_watchparty: "🎉 वॉच पार्टी",
+        settings_notif_label: "नोटिफिकेशन",
+        mood_placeholder: "मुझे कुछ धीमा और भावुक देखना है...",
+        mood_submit_btn: "ढूंढो →",
+        mood_error: "यह मूड समझ नहीं आया — थोड़ा अलग तरीके से बताएं।",
+        recent_heading: "🕓 हाल ही में देखा",
+        ott_heading: "📺 आपके पास क्या है?",
+        spoiler_toggle_label: "स्पॉइलर-सेफ",
+        explain_loading_eli5: "तैयार हो रहा है (सरल)...",
+        explain_loading_critic: "तैयार हो रहा है (समीक्षक)...",
+        compare_desc: "अभी देख रहे हैं:",
+        compare_placeholder: "किससे तुलना करें? जैसे Interstellar",
+        compare_btn: "तुलना करें 🎬",
+        watchparty_desc: "दोनों कुछ सवालों के जवाब दें, हम दोनों की पसंद मिलाकर एक फिल्म सुझाएंगे।",
+        watchparty_room_label: "रूम कोड",
+        watchparty_copy_btn: "लिंक कॉपी करें",
+        watchparty_continue_btn: "आगे बढ़ें →",
+        watchparty_player_a: "खिलाड़ी 1 की बारी",
+        watchparty_player_b: "खिलाड़ी 2 की बारी",
+        watchparty_finding: "आप दोनों के लिए फिल्म ढूंढ रहे हैं...",
+        ticket_affiliate_btn: "🎟️ टिकट बुक करें",
+        notif_enabled_toast: "नोटिफिकेशन चालू 🔔",
+        offline_toast: "आप ऑफलाइन हैं — जो उपलब्ध है वो दिखा रहे हैं।",
+        why_youll_like_prefix: "💡 क्योंकि आपको पसंद आई"
     }
 };
 
@@ -864,6 +919,44 @@ const homeTrendingSection = document.getElementById("home-trending-section");
 const homeTrendingStrip = document.getElementById("home-trending-strip");
 const homeTrendingHeadingEl = document.querySelector(".home-trending-heading");
 const startSubtitleEl = document.getElementById("start-subtitle");
+
+// Phase 2 enhancement refs
+const cinemaModeBtn = document.getElementById("cinema-mode-btn");
+const cinemaModeOverlay = document.getElementById("cinema-mode-overlay");
+const moodInput = document.getElementById("mood-input");
+const moodSubmitBtn = document.getElementById("mood-submit-btn");
+const moodError = document.getElementById("mood-error");
+const ottChipRow = document.getElementById("ott-chip-row");
+const ottSelectHeading = document.getElementById("ott-select-heading");
+const homeRecentSection = document.getElementById("home-recently-viewed-section");
+const homeRecentStrip = document.getElementById("home-recent-strip");
+const homeRecentHeadingEl = document.getElementById("home-recent-heading");
+const explainWaveform = document.getElementById("explain-waveform");
+const whyYoullLikeBadge = document.getElementById("why-youll-like-badge");
+const ticketAffiliateLink = document.getElementById("ticket-affiliate-link");
+const personaEli5Btn = document.getElementById("persona-eli5-btn");
+const personaCriticBtn = document.getElementById("persona-critic-btn");
+const spoilerToggleInput = document.getElementById("spoiler-toggle-input");
+const spoilerToggleLabel = document.getElementById("spoiler-toggle-label");
+const compareModeBtn = document.getElementById("compare-mode-btn");
+const compareModal = document.getElementById("compare-modal");
+const compareModalBackdrop = document.getElementById("compare-modal-backdrop");
+const compareModalClose = document.getElementById("compare-modal-close");
+const compareCurrentTitle = document.getElementById("compare-current-title");
+const compareInput = document.getElementById("compare-input");
+const compareSubmitBtn = document.getElementById("compare-submit-btn");
+const movieChatMicBtn = document.getElementById("movie-chat-mic-btn");
+const notifToggleInput = document.getElementById("notif-toggle-input");
+const chipWatchparty = document.getElementById("chip-watchparty");
+const watchpartyModal = document.getElementById("watchparty-modal");
+const watchpartyModalBackdrop = document.getElementById("watchparty-modal-backdrop");
+const watchpartyModalClose = document.getElementById("watchparty-modal-close");
+const watchpartySetup = document.getElementById("watchparty-setup");
+const watchpartyRoomCode = document.getElementById("watchparty-room-code");
+const watchpartyCopyBtn = document.getElementById("watchparty-copy-btn");
+const watchpartyQuestions = document.getElementById("watchparty-questions");
+const watchpartyNextBtn = document.getElementById("watchparty-next-btn");
+const watchpartyResult = document.getElementById("watchparty-result");
 
 // -----------------------------------------------------------
 // 5b. SOUND FX (tiny synthesized sounds — no external audio files)
@@ -2220,6 +2313,18 @@ function renderMovie(movie) {
     moviePoster.alt = `${movie.title || "Movie"} poster`;
     renderGenres(movie);
 
+    // Ken-Burns zoom: strip then re-add the class so the animation restarts
+    // cleanly for every new movie (repeated classList adds don't retrigger).
+    moviePoster.classList.remove("poster-kenburns");
+    void moviePoster.offsetWidth;
+    moviePoster.classList.add("poster-kenburns");
+
+    // Dynamic poster-as-color-theme + Recently Viewed + Why-you'll-like badge
+    extractPosterAccentColor(moviePoster, moviePosterWrap);
+    renderWhyYoullLikeBadge(movie);
+    addToRecentlyViewed(movie);
+    updateAffiliateTicketLink(movie);
+
     if (movie.backdrop_path) {
         revealBackdrop.style.backgroundImage = `url(${TMDB_BACKDROP_URL}${movie.backdrop_path})`;
         revealBackdrop.classList.add("visible");
@@ -2357,6 +2462,7 @@ async function loadMovieExtras(movieId) {
                 streamingPlatforms.innerHTML = "";
                 flatrate.forEach((p) => streamingPlatforms.appendChild(buildPlatformPill(p)));
                 platformsSection.classList.remove("hidden");
+                markOwnedPlatforms(streamingPlatforms);
             } else if (!dedupedFree.length) {
                 streamingNone.classList.remove("hidden");
             }
@@ -2458,6 +2564,7 @@ nextMovieBtn.addEventListener("click", goToNextMovie);
 
         if (lockedAxis === "x" && Math.abs(dx) > SWIPE_THRESHOLD) {
             playSwipeSound(dx > 0 ? "right" : "left");
+            hapticFeedback(15);
             const flyDistance = dx > 0 ? window.innerWidth : -window.innerWidth;
             card.style.transition = "transform 0.32s ease-out, opacity 0.32s ease-out";
             card.style.transform = `translateX(${flyDistance}px) rotate(${dx > 0 ? 22 : -22}deg)`;
@@ -2583,7 +2690,15 @@ function buildChatPrompt(question) {
         .map((h) => `${h.role === "user" ? "User" : "Reel"}: ${h.text}`)
         .join("\n");
 
-    return `You are "Reel", a friendly, knowledgeable movie-chat assistant inside a movie app called PopcornNight. You are currently discussing ONE specific movie with the user, described below. Answer only using what you know about this movie (plot, cast, themes, ending, trivia, similar movies, etc.) — if you're unsure of a detail, say so honestly instead of making it up. Keep replies short and conversational, 2-4 sentences unless the user clearly wants more detail. Avoid spoilers unless the user's question directly asks about the ending or plot twists.
+    const spoilerInstruction = (spoilerToggleInput && spoilerToggleInput.checked)
+        ? "The user has turned ON spoiler-safe mode: NEVER reveal the ending, plot twists, or major reveals, even if directly asked — politely decline and offer a spoiler-free angle instead."
+        : "The user has turned OFF spoiler-safe mode (they've likely seen it or don't mind): feel free to discuss the ending, twists, and plot details freely when asked.";
+
+    const compareInstruction = /\bvs\b|\bversus\b|compare|should i watch .* or /i.test(question)
+        ? "\n\nThe user seems to be asking you to COMPARE this movie with another title. Give a short, structured verdict: 2-3 lines on how the two differ (tone, pacing, themes), then a clear one-line recommendation of which to watch tonight and why."
+        : "";
+
+    return `You are "Reel", a friendly, knowledgeable movie-chat assistant inside a movie app called PopcornNight. You are currently discussing ONE specific movie with the user, described below. Answer only using what you know (plot, cast, themes, ending, trivia, similar movies, etc.) — if you're unsure of a detail, say so honestly instead of making it up. Keep replies short and conversational, 2-4 sentences unless the user clearly wants more detail. ${spoilerInstruction}${compareInstruction}
 
 Movie details:
 ${movieContextText(chatMovieContext)}
@@ -2599,6 +2714,7 @@ Reply with ONLY your spoken reply text, in ${langLabel}, no labels, no markdown,
 async function sendChatMessage(question) {
     if (!question || chatBusy) return;
     chatBusy = true;
+    hapticFeedback(10);
     movieChatSend.disabled = true;
     appendChatBubble("user", question);
     chatHistory.push({ role: "user", text: question });
@@ -2669,13 +2785,29 @@ function pickVoiceForLang(langCode) {
     );
 }
 
+let explainPersona = "eli5"; // "eli5" | "critic"
+
+if (personaEli5Btn && personaCriticBtn) {
+    personaEli5Btn.addEventListener("click", () => {
+        explainPersona = "eli5";
+        personaEli5Btn.classList.add("active");
+        personaCriticBtn.classList.remove("active");
+    });
+    personaCriticBtn.addEventListener("click", () => {
+        explainPersona = "critic";
+        personaCriticBtn.classList.add("active");
+        personaEli5Btn.classList.remove("active");
+    });
+}
+
 function setExplainBtnState(state_) {
     // state_: "idle" | "loading" | "speaking"
     if (!movieExplainBtn) return;
     movieExplainBtn.classList.remove("is-loading", "is-speaking");
+    if (explainWaveform) explainWaveform.classList.toggle("hidden", state_ !== "speaking");
     if (state_ === "loading") {
         movieExplainBtn.classList.add("is-loading");
-        movieExplainBtnText.textContent = t("explain_loading");
+        movieExplainBtnText.textContent = explainPersona === "critic" ? t("explain_loading_critic") : t("explain_loading_eli5");
     } else if (state_ === "speaking") {
         movieExplainBtn.classList.add("is-speaking");
         movieExplainBtnText.textContent = t("explain_speaking");
@@ -2684,14 +2816,123 @@ function setExplainBtnState(state_) {
     }
 }
 
-function buildExplainPrompt(movie) {
+// Response caching (API cost saver): one cached explanation per
+// movie+persona+language combo, so repeat taps/visits cost 0ms + $0.
+function explainCacheKey(movie, persona) {
+    return `popcornnight_explain_${movie.id}_${persona}_${currentLang}`;
+}
+
+function getCachedExplain(movie, persona) {
+    try {
+        return localStorage.getItem(explainCacheKey(movie, persona));
+    } catch (e) { return null; }
+}
+
+function setCachedExplain(movie, persona, text) {
+    try { localStorage.setItem(explainCacheKey(movie, persona), text); } catch (e) {}
+}
+
+function buildExplainPrompt(movie, persona) {
     const langLabel = currentLang === "hi" ? "Hindi, written in the Devanagari script (हिंदी)" : "English";
-    return `You are "Reel", a movie-explainer voice assistant inside a movie app called PopcornNight. Explain the following movie to someone deciding whether to watch it tonight: what it's about, the vibe/tone, and why it's worth (or not worth) watching — in a warm, spoken, natural voice, like you're talking to a friend, NOT reading a synopsis. Keep it to about 5-7 sentences. Do not reveal major twist endings.
+    const personaLine = persona === "critic"
+        ? "Speak like a sharp, articulate film critic — reference tone, direction, performances, and craft, still in plain spoken language (not academic jargon)."
+        : "Speak like you're explaining it to a curious friend who knows nothing about movies yet — very simple words, short sentences, zero jargon (Explain Like I'm 5 style), but still engaging for an adult.";
+    return `You are "Reel", a movie-explainer voice assistant inside a movie app called PopcornNight. Explain the following movie to someone deciding whether to watch it tonight: what it's about, the vibe/tone, and why it's worth (or not worth) watching. ${personaLine} Keep it to about 5-7 sentences. Do not reveal major twist endings.
 
 Movie details:
 ${movieContextText(movie)}
 
 Reply with ONLY the spoken explanation text, in ${langLabel}, no labels, no markdown, no quotes, no headings.`;
+}
+
+// Splits narration text into sentence-sized chunks so we can start speaking
+// the first sentence the instant it's ready, instead of waiting for the
+// whole reply — combined with streamExplainText() below this
+// gives a real "snappy" streaming feel instead of one long wait.
+function splitIntoSentences(text) {
+    return (text.match(/[^.!?।]+[.!?।]*/g) || [text]).map((s) => s.trim()).filter(Boolean);
+}
+
+function speakQueue(sentences, langCode, onFirstStart, onAllDone) {
+    if (!sentences.length) { onAllDone(); return; }
+    let i = 0;
+    let startedOnce = false;
+    function speakNext() {
+        if (!isExplainBusy) return;
+        if (i >= sentences.length) { onAllDone(); return; }
+        const utterance = new SpeechSynthesisUtterance(sentences[i]);
+        utterance.lang = langCode;
+        const voice = pickVoiceForLang(langCode);
+        if (voice) utterance.voice = voice;
+        utterance.rate = 1;
+        utterance.onstart = () => {
+            if (!startedOnce) { startedOnce = true; onFirstStart(); }
+        };
+        utterance.onend = () => { i += 1; speakNext(); };
+        utterance.onerror = () => { i += 1; speakNext(); };
+        window.speechSynthesis.speak(utterance);
+    }
+    speakNext();
+}
+
+// Streams the Gemini reply via streamGenerateContent so narration can begin
+// on the first completed sentence rather than waiting for the full text.
+async function streamExplainText(promptText, onSentenceReady) {
+    if (!GEMINI_API_KEY || GEMINI_API_KEY === "YOUR_GEMINI_API_KEY_HERE") {
+        throw new Error("no-gemini-key");
+    }
+    const streamUrl = GEMINI_URL.replace(":generateContent", ":streamGenerateContent");
+    const res = await fetchWithTimeout(streamUrl, AI_FETCH_TIMEOUT_MS, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+        body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: promptText }] }],
+            generationConfig: { temperature: 0.9 }
+        })
+    });
+    if (!res.ok || !res.body) {
+        // Fall back to non-streaming call if streaming isn't available.
+        const full = await callGeminiText(promptText);
+        onSentenceReady(full);
+        return full;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let fullText = "";
+    let spoken = "";
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // The stream is a JSON array of objects arriving incrementally; pull
+        // out any complete "text": "..." fields we can find so far.
+        let match;
+        const textRegex = /"text"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+        let localBuffer = buffer;
+        while ((match = textRegex.exec(localBuffer)) !== null) {
+            try {
+                const chunk = JSON.parse(`"${match[1]}"`);
+                if (!fullText.endsWith(chunk)) fullText += chunk;
+            } catch (e) {}
+        }
+
+        const unspokenSoFar = fullText.slice(spoken.length);
+        const sentences = splitIntoSentences(unspokenSoFar);
+        // Speak all but the possibly-incomplete last sentence.
+        if (sentences.length > 1) {
+            for (let s = 0; s < sentences.length - 1; s++) {
+                onSentenceReady(sentences[s]);
+                spoken += sentences[s] + " ";
+            }
+        }
+    }
+    const remaining = fullText.slice(spoken.length).trim();
+    if (remaining) onSentenceReady(remaining);
+    return fullText;
 }
 
 async function explainMovie(movie) {
@@ -2710,34 +2951,59 @@ async function explainMovie(movie) {
     }
 
     isExplainBusy = true;
+    hapticFeedback(12);
     setExplainBtnState("loading");
+    const langCode = TMDB_LANG_MAP[currentLang] || "en-US";
+    const persona = explainPersona;
 
-    try {
-        const text = await callGeminiText(buildExplainPrompt(movie));
-        if (!isExplainBusy) return; // user cancelled while we were fetching
-
-        const utterance = new SpeechSynthesisUtterance(text);
-        const langCode = TMDB_LANG_MAP[currentLang] || "en-US";
-        utterance.lang = langCode;
-        const voice = pickVoiceForLang(langCode);
-        if (voice) utterance.voice = voice;
-        utterance.rate = 1;
-
-        utterance.onstart = () => setExplainBtnState("speaking");
-        utterance.onend = () => {
-            isExplainBusy = false;
-            setExplainBtnState("idle");
-        };
-        utterance.onerror = () => {
-            isExplainBusy = false;
-            setExplainBtnState("idle");
-        };
-
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance);
-    } catch (err) {
+    const finishUp = () => {
         isExplainBusy = false;
         setExplainBtnState("idle");
+    };
+
+    try {
+        const cached = getCachedExplain(movie, persona);
+        if (cached) {
+            const sentences = splitIntoSentences(cached);
+            speakQueue(sentences, langCode, () => setExplainBtnState("speaking"), finishUp);
+            return;
+        }
+
+        const sentenceQueue = [];
+        let queueRunning = false;
+        let streamDone = false;
+        let fullCollected = "";
+
+        function pump() {
+            if (queueRunning) return;
+            if (!sentenceQueue.length) {
+                if (streamDone) finishUp();
+                return;
+            }
+            queueRunning = true;
+            const next = sentenceQueue.shift();
+            const utterance = new SpeechSynthesisUtterance(next);
+            utterance.lang = langCode;
+            const voice = pickVoiceForLang(langCode);
+            if (voice) utterance.voice = voice;
+            utterance.rate = 1;
+            utterance.onstart = () => setExplainBtnState("speaking");
+            utterance.onend = () => { queueRunning = false; pump(); };
+            utterance.onerror = () => { queueRunning = false; pump(); };
+            window.speechSynthesis.speak(utterance);
+        }
+
+        window.speechSynthesis.cancel();
+        fullCollected = await streamExplainText(buildExplainPrompt(movie, persona), (sentence) => {
+            if (!isExplainBusy) return;
+            sentenceQueue.push(sentence);
+            pump();
+        });
+        streamDone = true;
+        if (fullCollected) setCachedExplain(movie, persona, fullCollected);
+        if (!sentenceQueue.length && !queueRunning) finishUp();
+    } catch (err) {
+        finishUp();
         appendExplainError();
     }
 }
@@ -3018,6 +3284,7 @@ function updateWishlistCountBadge() {
 // in to reflect the new state. Requires sign-in — nudges the user to sign
 // in with Google rather than silently failing.
 function toggleWishlist(movie, ...btnEls) {
+    hapticFeedback(10);
     if (!currentUser) {
         showMovieHomeToast(t("wishlist_signin_required"));
         signInWithGoogle();
@@ -3145,7 +3412,523 @@ function initHomescreen() {
         const mode = chip.dataset.mode;
         if (mode) chip.textContent = t(`chip_${mode}`);
     });
+    renderRecentlyViewedRail();
+    renderOttChips();
+    if (moodInput) moodInput.placeholder = t("mood_placeholder");
+    if (moodSubmitBtn) moodSubmitBtn.textContent = t("mood_submit_btn");
+    if (homeRecentHeadingEl) homeRecentHeadingEl.textContent = t("recent_heading");
+    if (ottSelectHeading) ottSelectHeading.textContent = t("ott_heading");
+    if (spoilerToggleLabel) spoilerToggleLabel.textContent = t("spoiler_toggle_label");
 }
+
+// =========================================================
+// PHASE 2 ENHANCEMENTS
+// =========================================================
+
+// --- Haptic feedback (mobile) ---
+function hapticFeedback(pattern) {
+    try {
+        if (navigator.vibrate) navigator.vibrate(pattern);
+    } catch (e) {}
+}
+
+// --- Cinema / Dim mode toggle ---
+(function setupCinemaMode() {
+    if (!cinemaModeBtn) return;
+    let active = false;
+    try { active = localStorage.getItem("popcornnight_cinema_mode") === "1"; } catch (e) {}
+    function apply() {
+        document.body.classList.toggle("cinema-mode", active);
+        cinemaModeBtn.classList.toggle("active", active);
+        if (cinemaModeOverlay) cinemaModeOverlay.classList.toggle("active", active);
+    }
+    apply();
+    cinemaModeBtn.addEventListener("click", () => {
+        active = !active;
+        apply();
+        hapticFeedback(8);
+        try { localStorage.setItem("popcornnight_cinema_mode", active ? "1" : "0"); } catch (e) {}
+    });
+})();
+
+// --- Dynamic poster-as-color-theme (Canvas dominant color extraction) ---
+function extractPosterAccentColor(imgEl, wrapEl) {
+    if (!imgEl || !wrapEl) return;
+    wrapEl.classList.remove("has-accent");
+    if (revealBackdrop) revealBackdrop.classList.remove("has-accent");
+
+    const run = () => {
+        try {
+            const canvas = document.createElement("canvas");
+            const w = (canvas.width = 24);
+            const h = (canvas.height = 34);
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(imgEl, 0, 0, w, h);
+            const data = ctx.getImageData(0, 0, w, h).data;
+            let r = 0, g = 0, b = 0, count = 0;
+            for (let i = 0; i < data.length; i += 4) {
+                const alpha = data[i + 3];
+                if (alpha < 100) continue;
+                const rr = data[i], gg = data[i + 1], bb = data[i + 2];
+                // Skip near-black/near-white pixels which tend to be letterboxing.
+                const lum = (rr + gg + bb) / 3;
+                if (lum < 18 || lum > 240) continue;
+                r += rr; g += gg; b += bb; count++;
+            }
+            if (!count) return;
+            r = Math.round(r / count); g = Math.round(g / count); b = Math.round(b / count);
+            // Boost saturation a touch so the glow reads as vibrant, not muddy.
+            const accent = `rgb(${r}, ${g}, ${b})`;
+            wrapEl.style.setProperty("--poster-accent", accent);
+            wrapEl.classList.add("has-accent");
+            if (revealBackdrop) revealBackdrop.classList.add("has-accent");
+        } catch (e) {
+            // Canvas tainted by cross-origin image (CORS) — silently skip, the
+            // rest of the UI still works fine without the dynamic accent.
+        }
+    };
+
+    if (imgEl.complete && imgEl.naturalWidth) {
+        run();
+    } else {
+        imgEl.addEventListener("load", run, { once: true });
+    }
+}
+
+// --- Why-You'll-Like-This badge (based on wishlist genre overlap) ---
+function renderWhyYoullLikeBadge(movie) {
+    if (!whyYoullLikeBadge) return;
+    whyYoullLikeBadge.classList.add("hidden");
+    if (!currentUser) return;
+    const wishlist = getWishlist();
+    if (!wishlist.length || !movie.genre_ids || !movie.genre_ids.length) return;
+
+    const genreCounts = new Map();
+    wishlist.forEach((m) => (m.genre_ids || []).forEach((id) => genreCounts.set(id, (genreCounts.get(id) || 0) + 1)));
+
+    let bestGenre = null, bestCount = 0;
+    movie.genre_ids.forEach((id) => {
+        const c = genreCounts.get(id) || 0;
+        if (c > bestCount) { bestCount = c; bestGenre = id; }
+    });
+    if (!bestGenre || bestCount === 0) return;
+
+    const meta = genreLabel(bestGenre);
+    const exampleTitle = wishlist.find((m) => (m.genre_ids || []).includes(bestGenre))?.title;
+    if (!meta || !exampleTitle) return;
+
+    whyYoullLikeBadge.textContent = `${t("why_youll_like_prefix")} ${exampleTitle} (${meta.icon} ${meta.label})`;
+    whyYoullLikeBadge.classList.remove("hidden");
+}
+
+// --- Recently Viewed rail ---
+const RECENT_KEY = "popcornnight_recently_viewed";
+const RECENT_MAX = 12;
+
+function getRecentlyViewed() {
+    try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch (e) { return []; }
+}
+
+function addToRecentlyViewed(movie) {
+    if (!movie || !movie.id) return;
+    let list = getRecentlyViewed();
+    list = list.filter((m) => m.id !== movie.id);
+    list.unshift({
+        id: movie.id,
+        title: movie.title || "",
+        poster_path: movie.poster_path || "",
+        vote_average: movie.vote_average || 0,
+        genre_ids: movie.genre_ids || []
+    });
+    list = list.slice(0, RECENT_MAX);
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch (e) {}
+}
+
+function renderRecentlyViewedRail() {
+    if (!homeRecentStrip || !homeRecentSection) return;
+    const list = getRecentlyViewed();
+    if (!list.length) {
+        homeRecentSection.classList.add("hidden");
+        return;
+    }
+    homeRecentStrip.innerHTML = "";
+    const frag = document.createDocumentFragment();
+    list.forEach((movie) => {
+        const item = document.createElement("div");
+        item.className = "home-trending-item";
+        const posterPath = movie.poster_path ? `${TMDB_IMG_URL}${movie.poster_path}` : PLACEHOLDER_POSTER;
+        item.innerHTML = `<img src="${posterPath}" alt="${movie.title}" loading="lazy">`;
+        item.addEventListener("click", () => loadSharedMovie(movie.id));
+        frag.appendChild(item);
+    });
+    homeRecentStrip.appendChild(frag);
+    homeRecentSection.classList.remove("hidden");
+}
+
+// --- Mood-to-Movie one-liner (skips the quiz entirely) ---
+async function handleMoodSubmit() {
+    const text = moodInput && moodInput.value.trim();
+    if (!text) return;
+    if (moodError) moodError.classList.add("hidden");
+    hapticFeedback(10);
+    if (moodSubmitBtn) { moodSubmitBtn.disabled = true; moodSubmitBtn.textContent = "..."; }
+
+    try {
+        const langLabel = currentLang === "hi" ? "Hindi, written in the Devanagari script (हिंदी)" : "English";
+        const prompt = `A user typed this free-form mood/craving into a movie app called PopcornNight: "${text}"
+
+Based on this mood, recommend movies for tonight — skip any quiz, go straight to picks.
+
+Reply with ONLY strict JSON (no markdown, no commentary) matching EXACTLY this shape:
+{"type":"recommendation","movies":[{"title":"<exact real movie title>","year":<release year as a number>,"reason":"<one short, punchy sentence on why it fits the mood, in ${langLabel}>"}]}
+- Include EXACTLY 6 real, existing movies, ordered best match first.
+- Never invent a movie — only recommend titles you're confident actually exist.
+- Every "reason" must be written entirely in ${langLabel}.`;
+        const parsed = await callGemini(prompt);
+
+        if (!parsed || !Array.isArray(parsed.movies) || !parsed.movies.length) {
+            throw new Error("mood-no-movies");
+        }
+
+        state = freshState();
+        state.isAiMode = true;
+        state.aiHistory = [{ question: "What are you in the mood for tonight?", answer: text }];
+        state.aiRecommendations = parsed.movies;
+
+        goToReveal();
+    } catch (err) {
+        if (moodError) {
+            moodError.textContent = t("mood_error");
+            moodError.classList.remove("hidden");
+        }
+    } finally {
+        if (moodSubmitBtn) { moodSubmitBtn.disabled = false; moodSubmitBtn.textContent = t("mood_submit_btn"); }
+    }
+}
+
+if (moodSubmitBtn) moodSubmitBtn.addEventListener("click", handleMoodSubmit);
+if (moodInput) {
+    moodInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") handleMoodSubmit();
+    });
+}
+
+// --- OTT-aware filtering (subscription chip selector) ---
+const OTT_PROVIDERS = [
+    { id: 8, name: "Netflix" },
+    { id: 119, name: "Prime Video" },
+    { id: 122, name: "Hotstar" },
+    { id: 337, name: "Disney+" },
+    { id: 350, name: "Apple TV+" }
+];
+const OTT_KEY = "popcornnight_ott_subs";
+
+function getSelectedOtt() {
+    try { return JSON.parse(localStorage.getItem(OTT_KEY) || "[]"); } catch (e) { return []; }
+}
+function setSelectedOtt(ids) {
+    try { localStorage.setItem(OTT_KEY, JSON.stringify(ids)); } catch (e) {}
+}
+
+function renderOttChips() {
+    if (!ottChipRow) return;
+    const selected = new Set(getSelectedOtt());
+    ottChipRow.innerHTML = "";
+    OTT_PROVIDERS.forEach((p) => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "ott-chip" + (selected.has(p.id) ? " selected" : "");
+        chip.textContent = p.name;
+        chip.addEventListener("click", () => {
+            const current = new Set(getSelectedOtt());
+            if (current.has(p.id)) current.delete(p.id); else current.add(p.id);
+            setSelectedOtt([...current]);
+            chip.classList.toggle("selected");
+            hapticFeedback(6);
+        });
+        ottChipRow.appendChild(chip);
+    });
+}
+
+// Highlights streaming pills that match the user's selected subscriptions —
+// called from loadMovieExtras() after platform pills are built.
+function markOwnedPlatforms(container) {
+    const selected = new Set(getSelectedOtt());
+    if (!selected.size || !container) return;
+    container.querySelectorAll(".platform-pill").forEach((pill) => {
+        const img = pill.querySelector("img");
+        if (!img) return;
+        // We don't have the provider id on the pill DOM, so match loosely by
+        // logo URL id isn't available — instead match by visible name text.
+        const nameEl = pill.querySelector("span:last-child");
+        const name = nameEl ? nameEl.textContent : "";
+        const owned = OTT_PROVIDERS.some((p) => selected.has(p.id) && name.toLowerCase().includes(p.name.toLowerCase().split(" ")[0].toLowerCase()));
+        if (owned) pill.classList.add("on-your-service");
+    });
+}
+
+// --- Affiliate ticket link (BookMyShow-style deep link for in-theaters picks) ---
+function updateAffiliateTicketLink(movie) {
+    if (!ticketAffiliateLink) return;
+    if (!movie || !movie.release_date) {
+        ticketAffiliateLink.classList.add("hidden");
+        return;
+    }
+    const releaseDate = new Date(movie.release_date);
+    const daysSinceRelease = (Date.now() - releaseDate.getTime()) / 86400000;
+    // Only show for movies that released recently or are upcoming — i.e.
+    // plausibly still in theaters.
+    if (isNaN(daysSinceRelease) || daysSinceRelease > 45 || daysSinceRelease < -60) {
+        ticketAffiliateLink.classList.add("hidden");
+        return;
+    }
+    const query = encodeURIComponent(movie.title || "");
+    // Affiliate/tracking id placeholder — swap in a real BookMyShow (or local
+    // ticketing partner) affiliate id here once you have one.
+    ticketAffiliateLink.href = `https://in.bookmyshow.com/explore/movies?q=${query}&utm_source=popcornnight&utm_medium=affiliate`;
+    ticketAffiliateLink.textContent = t("ticket_affiliate_btn");
+    ticketAffiliateLink.classList.remove("hidden");
+}
+
+// --- Persona/spoiler labels refresh on language change is handled by
+//     applyStaticTranslations() calling initHomescreen()/rerenders elsewhere.
+
+// --- Voice input (SpeechRecognition) for the chat box ---
+(function setupVoiceInput() {
+    if (!movieChatMicBtn) return;
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionAPI) {
+        movieChatMicBtn.classList.add("hidden");
+        return;
+    }
+    let recognition = null;
+    let listening = false;
+
+    function getRecognizer() {
+        if (recognition) return recognition;
+        recognition = new SpeechRecognitionAPI();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+        recognition.onresult = (e) => {
+            const transcript = e.results[0][0].transcript;
+            if (movieChatInput) movieChatInput.value = transcript;
+        };
+        recognition.onend = () => {
+            listening = false;
+            movieChatMicBtn.classList.remove("is-listening");
+            const val = movieChatInput && movieChatInput.value.trim();
+            if (val) sendChatMessage(val).then(() => { if (movieChatInput) movieChatInput.value = ""; });
+        };
+        recognition.onerror = () => {
+            listening = false;
+            movieChatMicBtn.classList.remove("is-listening");
+        };
+        return recognition;
+    }
+
+    movieChatMicBtn.addEventListener("click", () => {
+        const rec = getRecognizer();
+        rec.lang = TMDB_LANG_MAP[currentLang] || "en-US";
+        if (listening) {
+            rec.stop();
+            listening = false;
+            movieChatMicBtn.classList.remove("is-listening");
+            return;
+        }
+        try {
+            rec.start();
+            listening = true;
+            hapticFeedback(10);
+            movieChatMicBtn.classList.add("is-listening");
+        } catch (e) {}
+    });
+})();
+
+// --- Persona toggle inside chat modal is separate from Explain persona —
+//     keep both button groups in sync since they represent the same setting.
+if (personaEli5Btn && personaCriticBtn) {
+    // already wired above near explainMovie(); nothing further needed here.
+}
+
+// --- Movie Comparison Engine (dedicated modal, feeds the chat) ---
+if (compareModeBtn) {
+    compareModeBtn.addEventListener("click", () => {
+        if (!chatMovieContext) return;
+        if (compareCurrentTitle) compareCurrentTitle.textContent = chatMovieContext.title || "";
+        if (compareInput) compareInput.value = "";
+        compareModal.classList.remove("hidden");
+        setTimeout(() => compareInput && compareInput.focus(), 150);
+    });
+}
+if (compareModalClose) compareModalClose.addEventListener("click", () => compareModal.classList.add("hidden"));
+if (compareModalBackdrop) compareModalBackdrop.addEventListener("click", () => compareModal.classList.add("hidden"));
+if (compareSubmitBtn) {
+    compareSubmitBtn.addEventListener("click", () => {
+        const other = compareInput && compareInput.value.trim();
+        if (!other || !chatMovieContext) return;
+        compareModal.classList.add("hidden");
+        const question = `Should I watch "${chatMovieContext.title}" or "${other}" tonight? Compare them.`;
+        if (movieChatModal.classList.contains("hidden")) openMovieChat(chatMovieContext);
+        sendChatMessage(question);
+    });
+}
+
+// --- PWA: notification permission toggle (local demo notification; a real
+//     push backend would be required for true server-sent push) ---
+if (notifToggleInput) {
+    try { notifToggleInput.checked = localStorage.getItem("popcornnight_notif") === "1" && Notification.permission === "granted"; } catch (e) {}
+    notifToggleInput.addEventListener("change", async () => {
+        if (notifToggleInput.checked) {
+            try {
+                const perm = await Notification.requestPermission();
+                if (perm === "granted") {
+                    try { localStorage.setItem("popcornnight_notif", "1"); } catch (e) {}
+                    showToast(t("notif_enabled_toast"));
+                    new Notification("PopcornNight 🍿", { body: "You're all set — we'll let you know about picks worth seeing." });
+                } else {
+                    notifToggleInput.checked = false;
+                }
+            } catch (e) {
+                notifToggleInput.checked = false;
+            }
+        } else {
+            try { localStorage.setItem("popcornnight_notif", "0"); } catch (e) {}
+        }
+    });
+}
+
+// --- Offline detection toast ---
+window.addEventListener("offline", () => showToast(t("offline_toast")));
+
+// Lightweight TMDB title search that RETURNS results (unlike performSearch(),
+// which renders straight into the search-panel UI) — used by features like
+// Watch Party that need the raw match data instead.
+async function searchMovieByTitle(title) {
+    try {
+        const langParam = TMDB_LANG_MAP[currentLang] || "en-US";
+        const url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}&language=${langParam}&include_adult=false&page=1`;
+        const data = await cachedFetchJson(url);
+        return (data && data.results) || [];
+    } catch (e) {
+        return [];
+    }
+}
+
+// --- Watch Party Mode (same-device, two-player taste merge) ---
+(function setupWatchParty() {
+    if (!chipWatchparty) return;
+    const PARTY_QUESTIONS = [
+        { key: "genre", title: "Pick a genre", options: ["Action", "Comedy", "Romance", "Horror", "Thriller", "Drama"] },
+        { key: "mood", title: "Tonight's mood", options: ["Laugh 😂", "Cry 😭", "Thrill 😱", "Chill 😌"] },
+        { key: "era", title: "Any era preference?", options: ["Latest", "2010s", "2000s", "Classics", "No preference"] }
+    ];
+    let currentPlayer = 1;
+    let answersA = {};
+    let answersB = {};
+    let roomCode = "";
+
+    function genRoomCode() {
+        return Math.random().toString(36).slice(2, 8).toUpperCase();
+    }
+
+    function renderQuestions(answersRef) {
+        watchpartyQuestions.innerHTML = "";
+        PARTY_QUESTIONS.forEach((q) => {
+            const block = document.createElement("div");
+            block.className = "watchparty-question-block";
+            const title = document.createElement("div");
+            title.className = "watchparty-question-title";
+            title.textContent = q.title;
+            block.appendChild(title);
+            const row = document.createElement("div");
+            row.className = "watchparty-option-row";
+            q.options.forEach((opt) => {
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "watchparty-option" + (answersRef[q.key] === opt ? " selected" : "");
+                btn.textContent = opt;
+                btn.addEventListener("click", () => {
+                    answersRef[q.key] = opt;
+                    row.querySelectorAll(".watchparty-option").forEach((b) => b.classList.remove("selected"));
+                    btn.classList.add("selected");
+                    hapticFeedback(6);
+                });
+                row.appendChild(btn);
+            });
+            block.appendChild(row);
+            watchpartyQuestions.appendChild(block);
+        });
+    }
+
+    function openParty() {
+        roomCode = genRoomCode();
+        watchpartyRoomCode.textContent = roomCode;
+        currentPlayer = 1;
+        answersA = {};
+        answersB = {};
+        watchpartySetup.classList.remove("hidden");
+        watchpartyResult.classList.add("hidden");
+        watchpartyNextBtn.textContent = t("watchparty_continue_btn");
+        renderQuestions(answersA);
+        watchpartyModal.classList.remove("hidden");
+    }
+
+    async function finishParty() {
+        watchpartySetup.classList.add("hidden");
+        watchpartyResult.classList.remove("hidden");
+        watchpartyResult.textContent = t("watchparty_finding");
+        try {
+            const prompt = `Two friends are picking a movie together tonight. Their quick taste answers:
+Player 1: ${JSON.stringify(answersA)}
+Player 2: ${JSON.stringify(answersB)}
+
+Suggest ONE well-known real movie both would likely enjoy, blending their tastes (compromise where they differ). Reply with ONLY a JSON object: {"title": "movie title", "reason": "one short sentence explaining the pick, in ${currentLang === "hi" ? "Hindi" : "English"}"}`;
+            const parsed = await callGemini(prompt);
+            const results = await searchMovieByTitle(parsed.title);
+            watchpartyResult.innerHTML = "";
+            const p = document.createElement("p");
+            p.textContent = `🎬 ${parsed.title} — ${parsed.reason || ""}`;
+            watchpartyResult.appendChild(p);
+            if (results && results.length) {
+                const btn = document.createElement("button");
+                btn.className = "btn ticket-btn watchparty-next-btn";
+                btn.textContent = "🍿 Watch This";
+                btn.addEventListener("click", () => {
+                    watchpartyModal.classList.add("hidden");
+                    loadSharedMovie(results[0].id);
+                });
+                watchpartyResult.appendChild(btn);
+            }
+        } catch (e) {
+            watchpartyResult.textContent = t("chat_error");
+        }
+    }
+
+    watchpartyNextBtn.addEventListener("click", () => {
+        if (currentPlayer === 1) {
+            currentPlayer = 2;
+            renderQuestions(answersB);
+        } else {
+            finishParty();
+        }
+    });
+
+    chipWatchparty.addEventListener("click", openParty);
+    if (watchpartyModalClose) watchpartyModalClose.addEventListener("click", () => watchpartyModal.classList.add("hidden"));
+    if (watchpartyModalBackdrop) watchpartyModalBackdrop.addEventListener("click", () => watchpartyModal.classList.add("hidden"));
+    if (watchpartyCopyBtn) {
+        watchpartyCopyBtn.addEventListener("click", async () => {
+            const url = `${window.location.origin}${window.location.pathname}?party=${roomCode}`;
+            try {
+                await navigator.clipboard.writeText(url);
+                showToast(t("share_copied"));
+            } catch (e) {
+                window.prompt("Copy this link:", url);
+            }
+        });
+    }
+})();
 
 // -----------------------------------------------------------
 // 16. SHARE
@@ -3295,6 +4078,40 @@ async function loadFilmReel() {
     posterItems = posterItems.sort(() => Math.random() - 0.5);
     renderFilmReel(posterItems.slice(0, FILM_REEL_POSTER_COUNT));
     renderPosterRails(posterItems.slice(FILM_REEL_POSTER_COUNT, FILM_REEL_POSTER_COUNT + 24));
+    startMobileHeroBackdrop(posterItems);
+}
+
+// --- Responsive hero background: on mobile/tablet (where the desktop-only
+//     side poster rails are hidden), slow-crossfade blurred posters behind
+//     the homescreen instead, so the "movie vibes" ambience isn't desktop-only.
+function startMobileHeroBackdrop(posterItems) {
+    const a = document.getElementById("mobile-hero-backdrop-a");
+    const b = document.getElementById("mobile-hero-backdrop-b");
+    if (!a || !b || !posterItems.length) return;
+    const usable = posterItems.filter((p) => p.poster_path);
+    if (!usable.length) return;
+
+    let idx = 0;
+    let showingA = true;
+
+    function urlFor(item) {
+        const path = item.poster_path;
+        return !path.startsWith("http") && !path.startsWith("data:") ? `${TMDB_IMG_URL}${path}` : path;
+    }
+
+    function tick() {
+        const item = usable[idx % usable.length];
+        idx++;
+        const showEl = showingA ? a : b;
+        const hideEl = showingA ? b : a;
+        showEl.style.backgroundImage = `url(${urlFor(item)})`;
+        showEl.classList.add("visible");
+        hideEl.classList.remove("visible");
+        showingA = !showingA;
+    }
+
+    tick();
+    setInterval(tick, 7000);
 }
 
 // Desktop-only decorative side rails (see .poster-rail in style.css). Reuses

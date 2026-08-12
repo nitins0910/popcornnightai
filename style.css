@@ -2665,3 +2665,343 @@ h1, h2, h3 {
     25% { transform: translateX(-10px) rotate(-2deg); }
     75% { transform: translateX(10px) rotate(2deg); }
 }
+/* =========================================================
+   PHASE 2 ENHANCEMENTS — new features CSS
+   ========================================================= */
+
+/* --- Responsive hero background (mobile/tablet crossfade backdrop) --- */
+.mobile-hero-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    opacity: 0;
+    background-size: cover;
+    background-position: center 20%;
+    filter: blur(28px) brightness(0.55) saturate(1.2);
+    transform: scale(1.15);
+    transition: opacity 1.6s ease, background-image 1.6s ease;
+    pointer-events: none;
+}
+.mobile-hero-backdrop.visible { opacity: 0.55; }
+@media (min-width: 1300px) {
+    .mobile-hero-backdrop { display: none; }
+}
+
+/* --- Cinema / Dim mode --- */
+.cinema-mode-btn svg { transition: transform 0.3s ease, color 0.3s ease; }
+.cinema-mode-btn.active { color: var(--gold-bright); }
+.cinema-mode-btn.active svg { transform: rotate(180deg); }
+.cinema-mode-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(4, 2, 10, 0.82);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+}
+.cinema-mode-overlay.active { opacity: 1; }
+body.cinema-mode #movie-result,
+body.cinema-mode .movie-card {
+    position: relative;
+    z-index: 41;
+}
+body.cinema-mode .top-left-actions,
+body.cinema-mode .top-right-actions { z-index: 42; position: relative; }
+
+/* --- Dynamic poster-as-color-theme --- */
+.poster-wrap {
+    --poster-accent: var(--pink);
+    transition: box-shadow 0.6s ease;
+}
+.poster-wrap.has-accent {
+    box-shadow: 0 0 60px -10px var(--poster-accent), 0 0 120px -30px var(--poster-accent);
+}
+#reveal-backdrop.visible.has-accent {
+    background-color: var(--poster-accent);
+    background-blend-mode: overlay;
+}
+
+/* --- Ken-Burns poster reveal animation --- */
+#movie-poster.poster-kenburns {
+    animation: kenBurnsZoom 3s ease-out forwards;
+}
+@keyframes kenBurnsZoom {
+    0% { transform: scale(1.14); }
+    100% { transform: scale(1); }
+}
+
+/* --- Card stack depth effect (Tinder-style peek cards) --- */
+#movie-result { position: relative; }
+.card-stack-ghost {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    width: min(320px, 86%);
+    height: 88%;
+    max-height: 560px;
+    border-radius: 22px;
+    background: linear-gradient(160deg, rgba(45, 20, 60, 0.7), rgba(20, 8, 30, 0.85));
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    pointer-events: none;
+    z-index: -1;
+}
+.card-stack-ghost-1 { transform: translateX(-50%) rotate(-4deg) scale(0.97); opacity: 0.55; }
+.card-stack-ghost-2 { transform: translateX(-50%) rotate(5deg) scale(0.93); opacity: 0.32; }
+
+/* --- Skeleton shimmer for browse-grid cards while loading --- */
+.browse-card.is-skeleton {
+    background: linear-gradient(100deg, rgba(255,255,255,0.03) 30%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 70%);
+    background-size: 200% 100%;
+    animation: skeletonShimmer 1.3s ease-in-out infinite;
+}
+.browse-card.is-skeleton img { visibility: hidden; }
+
+/* --- Audio waveform for Explain (voice) --- */
+.explain-waveform {
+    position: absolute;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 26px;
+    z-index: 5;
+}
+.explain-waveform.hidden { display: none; }
+.explain-waveform span {
+    width: 4px;
+    border-radius: 3px;
+    background: linear-gradient(180deg, var(--gold-bright), var(--pink-bright));
+    animation: waveformBounce 0.9s ease-in-out infinite;
+}
+.explain-waveform span:nth-child(1) { height: 8px; animation-delay: 0s; }
+.explain-waveform span:nth-child(2) { height: 18px; animation-delay: 0.1s; }
+.explain-waveform span:nth-child(3) { height: 26px; animation-delay: 0.2s; }
+.explain-waveform span:nth-child(4) { height: 14px; animation-delay: 0.3s; }
+.explain-waveform span:nth-child(5) { height: 20px; animation-delay: 0.4s; }
+@keyframes waveformBounce {
+    0%, 100% { transform: scaleY(0.4); }
+    50% { transform: scaleY(1); }
+}
+
+/* --- Mood one-liner box --- */
+.mood-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: min(480px, 92vw);
+    margin: 18px auto 6px;
+    padding: 6px 8px 6px 16px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 210, 63, 0.25);
+    backdrop-filter: blur(10px);
+}
+.mood-box-icon { font-size: 16px; opacity: 0.8; }
+.mood-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-main, #f4ece0);
+    font-family: inherit;
+    font-size: 14px;
+    padding: 8px 0;
+}
+.mood-input::placeholder { color: rgba(244, 236, 224, 0.4); }
+.mood-submit-btn {
+    border: none;
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-weight: 600;
+    font-size: 13px;
+    background: linear-gradient(100deg, var(--gold-bright), var(--pink-bright));
+    color: #1a0a10;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: transform 0.2s ease;
+}
+.mood-submit-btn:hover { transform: scale(1.04); }
+.mood-error {
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--pink-bright);
+    margin-top: 6px;
+}
+
+/* --- OTT subscription chip selector --- */
+.ott-select-section { width: min(560px, 94vw); margin: 18px auto 4px; text-align: center; }
+.ott-select-heading { font-size: 12.5px; letter-spacing: 0.04em; opacity: 0.65; margin-bottom: 8px; text-transform: uppercase; }
+.ott-chip-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.ott-chip {
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.04);
+    color: rgba(244, 236, 224, 0.85);
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.ott-chip.selected {
+    background: linear-gradient(100deg, var(--gold-bright), var(--pink-bright));
+    color: #1a0a10;
+    border-color: transparent;
+    font-weight: 600;
+}
+
+/* --- On-your-platform badge for streaming pills --- */
+.platform-pill.on-your-service {
+    outline: 2px solid var(--gold-bright);
+    outline-offset: 1px;
+}
+
+/* --- Why You'll Like This badge --- */
+.why-youll-like-badge {
+    display: inline-block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #1a0a10;
+    background: linear-gradient(100deg, var(--gold-bright), var(--pink-bright));
+    padding: 5px 12px;
+    border-radius: 999px;
+    margin: 2px 0 10px;
+}
+.why-youll-like-badge.hidden { display: none; }
+
+/* --- Persona toggle (ELI5 vs Critic) --- */
+.movie-chat-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 8px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.persona-toggle { display: flex; gap: 4px; background: rgba(255,255,255,0.05); border-radius: 999px; padding: 3px; }
+.persona-toggle-btn {
+    border: none;
+    background: transparent;
+    color: rgba(244, 236, 224, 0.6);
+    font-size: 11.5px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.persona-toggle-btn.active {
+    background: linear-gradient(100deg, var(--gold-bright), var(--pink-bright));
+    color: #1a0a10;
+    font-weight: 600;
+}
+
+/* --- Spoiler-safe toggle switch --- */
+.spoiler-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11.5px; color: rgba(244,236,224,0.75); }
+.spoiler-toggle input { display: none; }
+.spoiler-toggle-track {
+    width: 32px;
+    height: 18px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.15);
+    position: relative;
+    transition: background 0.25s ease;
+    flex-shrink: 0;
+}
+.spoiler-toggle-thumb {
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.25s ease;
+}
+.spoiler-toggle input:checked + .spoiler-toggle-track { background: var(--pink); }
+.spoiler-toggle input:checked + .spoiler-toggle-track .spoiler-toggle-thumb { transform: translateX(14px); }
+
+/* --- Compare button + modal --- */
+.compare-mode-btn {
+    margin-left: auto;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.04);
+    color: rgba(244,236,224,0.85);
+    font-size: 11.5px;
+    padding: 6px 11px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+.compare-modal-box, .watchparty-modal-box { text-align: left; }
+.compare-modal-desc { font-size: 13px; opacity: 0.7; margin: 6px 0 14px; }
+.compare-input { width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+.compare-submit-btn { width: 100%; }
+
+/* --- Voice input mic button --- */
+.movie-chat-mic-btn {
+    border: none;
+    background: rgba(255,255,255,0.06);
+    color: rgba(244,236,224,0.8);
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+}
+.movie-chat-mic-btn.is-listening {
+    background: var(--pink);
+    color: #fff;
+    animation: micPulse 1s ease-in-out infinite;
+}
+@keyframes micPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,46,136,0.5); }
+    50% { box-shadow: 0 0 0 8px rgba(255,46,136,0); }
+}
+
+/* --- Recently Viewed rail (reuses home-trending-strip styles) --- */
+#home-recently-viewed-section { margin-top: 10px; }
+
+/* --- Watch Party --- */
+.watchparty-desc { font-size: 13px; opacity: 0.75; margin-bottom: 14px; line-height: 1.5; }
+.watchparty-room-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.watchparty-room-label { font-size: 12px; opacity: 0.6; }
+.watchparty-room-code { font-family: "JetBrains Mono", monospace; letter-spacing: 0.15em; font-weight: 700; color: var(--gold-bright); font-size: 15px; }
+.watchparty-questions { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.watchparty-question-block { display: flex; flex-direction: column; gap: 6px; }
+.watchparty-question-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.watchparty-option-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.watchparty-option {
+    padding: 7px 13px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.04);
+    font-size: 12.5px;
+    cursor: pointer;
+}
+.watchparty-option.selected { background: linear-gradient(100deg, var(--gold-bright), var(--pink-bright)); color: #1a0a10; font-weight: 600; border-color: transparent; }
+.watchparty-next-btn { width: 100%; }
+.watchparty-result { font-size: 14px; line-height: 1.6; }
+
+/* --- Affiliate ticket link --- */
+.ticket-affiliate-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a0a10;
+    background: linear-gradient(100deg, var(--gold-bright), var(--pink-bright));
+    padding: 8px 14px;
+    border-radius: 999px;
+    text-decoration: none;
+}
+.ticket-affiliate-link.hidden { display: none; }
+
+/* --- Haptic: no visual CSS needed, JS-only via navigator.vibrate --- */
+
+/* --- Mobile refinements for new elements --- */
+@media (max-width: 480px) {
+    .movie-chat-toolbar { gap: 6px; }
+    .compare-mode-btn { margin-left: 0; }
+    .mood-box { flex-wrap: wrap; }
+}
