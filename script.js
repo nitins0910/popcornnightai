@@ -35,7 +35,7 @@ const TMDB_LANG_MAP = { en: "en-US", hi: "hi-IN" };
 //    if that happens, a working Standard key from an older project, like
 //    the one you're using now, is a valid workaround).
 // We send the key BOTH ways below so either format works without editing this file.
-const GEMINI_API_KEY = "AQ.Ab8RN6Lc679KcHIvcgN-O9Tij9TFO_jY2avfxF98VArHLPqPyA";
+const GEMINI_API_KEY = "AQ.Ab8RN6J0CS4eQ5SIefR7QSQRku0EjnPAthTi_2o6y5CpOPZ6zw";
 const GEMINI_MODEL = "gemini-3.5-flash-lite";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
 const AI_TYPICAL_QUESTIONS = 5;
