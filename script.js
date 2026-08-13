@@ -5017,6 +5017,26 @@ Reply with ONLY strict JSON matching this shape:
         showResultScreen();
         watchpartyResult.innerHTML = "";
 
+        if (Array.isArray(result.tallySummary) && result.tallySummary.length) {
+            const tallyRow = document.createElement("div");
+            tallyRow.className = "watchparty-tally-row";
+            result.tallySummary.forEach((line) => {
+                const [label, pick] = line.split(": ");
+                const chip = document.createElement("span");
+                chip.className = "watchparty-tally-chip";
+                if (pick) {
+                    chip.append(`${label}: `);
+                    const strong = document.createElement("strong");
+                    strong.textContent = pick;
+                    chip.appendChild(strong);
+                } else {
+                    chip.textContent = line;
+                }
+                tallyRow.appendChild(chip);
+            });
+            watchpartyResult.appendChild(tallyRow);
+        }
+
         if (result.groupReason) {
             const reason = document.createElement("p");
             reason.className = "watchparty-group-reason";
@@ -5046,32 +5066,81 @@ Reply with ONLY strict JSON matching this shape:
         watchpartyResult.appendChild(grid);
     }
 
+    // -------- Vote tally: explicit overlap counts per question, instead of
+    //     leaving Gemini to eyeball raw per-person JSON on its own --------
+    function tallyAnswers(room) {
+        const qs = (room && room.questions) || [];
+        const players = Object.values((room && room.players) || {});
+        return qs.map((q) => {
+            const counts = {};
+            players.forEach((p) => {
+                const ans = p.answers && p.answers[q.key];
+                if (ans) counts[ans] = (counts[ans] || 0) + 1;
+            });
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+            return { title: q.title, top: sorted[0] ? sorted[0][0] : null, line: sorted.map(([opt, n]) => `${opt} (${n})`).join(", ") };
+        });
+    }
+
     async function computeAndPublishResult(room) {
         watchpartyResult.textContent = currentLang === "hi"
             ? "पूरे ग्रुप के लिए फ़िल्में ढूंढ रहे हैं..."
             : "Finding movies the whole group will like...";
         try {
-            const answersSummary = Object.values(room.players || {})
-                .map((p) => `${p.name}: ${JSON.stringify(p.answers || {})}`)
+            const players = Object.values(room.players || {});
+
+            const answersSummary = players
+                .map((p) => {
+                    const likes = (p.genrePrefs || []).join(", ");
+                    return `${p.name}: answers=${JSON.stringify(p.answers || {})}${likes ? `, favorite genres=${likes}` : ""}`;
+                })
                 .join("\n");
+
+            const tally = tallyAnswers(room);
+            const tallyLines = tally.map((t) => `- ${t.title}: ${t.line}`).join("\n");
+
+            const streamSet = new Set();
+            players.forEach((p) => (p.ott || []).forEach((s) => streamSet.add(s)));
+            const streamLine = streamSet.size
+                ? `\n\nWhere reasonable, lean toward movies likely available on: ${[...streamSet].join(", ")}. Never sacrifice a genuinely better fit just to satisfy this.`
+                : "";
+
+            const excludeIds = new Set();
+            const excludeTitles = new Set();
+            players.forEach((p) => (p.exclude || []).forEach((m) => {
+                if (m.id) excludeIds.add(m.id);
+                if (m.title) excludeTitles.add(m.title);
+            }));
+            const excludeLine = excludeTitles.size
+                ? `\n\nDon't suggest these — the group has already seen them: ${[...excludeTitles].slice(0, 40).join(", ")}.`
+                : "";
+
             const langLabel = currentLang === "hi" ? "Hindi" : "English";
-            const prompt = `A group is picking a movie to watch together tonight. Here are each person's quick taste answers:
+            const prompt = `A group is picking a movie to watch together tonight. Here's how each person answered the quiz, plus their favorite genres from past picks:
 ${answersSummary}
 
-Suggest 6 well-known real movies that blend the group's tastes well (compromise where they differ, and vary the picks so it's a real shortlist, not 6 near-identical films). Reply with ONLY strict JSON:
+Vote tally per question (option: number of votes):
+${tallyLines}${streamLine}${excludeLine}
+
+Suggest 6 well-known real movies that blend the group's tastes well (compromise where they differ — lean toward whichever option got more votes, and vary the picks so it's a real shortlist, not 6 near-identical films). Reply with ONLY strict JSON:
 {"groupReason": "one short upbeat sentence (in ${langLabel}) summing up the group's vibe and why these picks fit", "movies": [{"title": "movie title"}, ... exactly 6 entries]}`;
             const parsed = await callGemini(prompt);
             const rawMovies = Array.isArray(parsed.movies) ? parsed.movies.slice(0, 6) : [];
             const resolved = await Promise.all(
                 rawMovies.map(async (m) => {
                     const found = await searchMovieByTitle(m.title);
-                    const best = found.find((r) => r.poster_path) || found[0] || null;
+                    const best = found.find((r) => r.poster_path && !excludeIds.has(r.id)) || found.find((r) => !excludeIds.has(r.id)) || null;
                     return best
                         ? { title: m.title, movieId: best.id, poster_path: best.poster_path }
                         : { title: m.title, movieId: null, poster_path: null };
                 })
             );
-            const result = { groupReason: parsed.groupReason || "", movies: resolved.filter((m) => m.movieId) };
+            const tallySummary = tally.filter((t) => t.top).map((t) => `${t.title}: ${t.top}`);
+            const result = {
+                groupReason: parsed.groupReason || "",
+                tallySummary,
+                movies: resolved.filter((m) => m.movieId)
+            };
             if (!result.movies.length) throw new Error("no-matches");
             renderGridResult(result);
             await patchRoom(roomCode, { result });
@@ -5126,8 +5195,40 @@ Suggest 6 well-known real movies that blend the group's tastes well (compromise 
     async function finishQuestions() {
         watchpartyNextBtn.disabled = true;
         try {
+            // Extra context alongside the quiz answers — same signals the solo
+            // mood-quiz already uses (OTT subs + wishlist genres), plus a
+            // "don't re-suggest this" list, so the group result can actually
+            // be watched and doesn't repeat something someone's already seen.
+            const catalog = currentUser ? await loadOttProviderCatalog() : [];
+            const selectedOttIds = new Set(getSelectedOtt());
+            const myOtt = catalog.filter((p) => selectedOttIds.has(p.id)).map((p) => p.name);
+
+            const wishlist = getWishlist();
+            const genreCounts = new Map();
+            wishlist.forEach((m) => (m.genre_ids || []).forEach((id) => genreCounts.set(id, (genreCounts.get(id) || 0) + 1)));
+            const myGenrePrefs = [...genreCounts.entries()]
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 2)
+                .map(([id]) => (GENRE_META[id] || {}).en)
+                .filter(Boolean);
+
+            const seen = [...wishlist, ...getRecentlyViewed()];
+            const seenUnique = new Map();
+            seen.forEach((m) => { if (m && m.id && !seenUnique.has(m.id)) seenUnique.set(m.id, m.title || ""); });
+            const myExclude = [...seenUnique.entries()].slice(0, 30).map(([id, title]) => ({ id, title }));
+
             await patchRoom(roomCode, {
-                players: { [myPlayerId]: { name: myName, joinedAt: Date.now(), done: true, answers: myAnswers } }
+                players: {
+                    [myPlayerId]: {
+                        name: myName,
+                        joinedAt: Date.now(),
+                        done: true,
+                        answers: myAnswers,
+                        ott: myOtt,
+                        genrePrefs: myGenrePrefs,
+                        exclude: myExclude
+                    }
+                }
             });
             const room = await fetchRoom(roomCode);
             hostComputeAttempted = false;

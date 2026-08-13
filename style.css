@@ -3399,6 +3399,16 @@ a.platform-pill:focus-visible {
 .watchparty-waiting-list { display: flex; flex-direction: column; gap: 8px; max-width: 320px; margin: 0 auto; }
 .watchparty-waiting-row { display: flex; align-items: center; gap: 10px; font-size: 13.5px; text-align: left; padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,0.04); }
 .watchparty-group-reason { font-size: 14.5px; opacity: 0.85; margin: 0 0 22px; line-height: 1.6; }
+.watchparty-tally-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 0 0 18px; }
+.watchparty-tally-chip {
+    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.04);
+    color: var(--ink-soft);
+}
+.watchparty-tally-chip strong { color: var(--gold-bright); font-weight: 600; }
 .watchparty-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
