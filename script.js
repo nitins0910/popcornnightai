@@ -2995,7 +2995,7 @@ function pcmToWavBlob(base64Pcm, sampleRate = 24000) {
 // Speaks one chunk of text with Gemini's AI voice via our worker proxy.
 // Resolves true on success, false on any failure (caller then falls back
 // to the browser voice for that sentence).
-function speakWithGeminiTTS(text) {
+function speakWithGeminiTTS(text, onStart) {
     return new Promise((resolve) => {
         fetchWithTimeout(GEMINI_TTS_URL, AI_FETCH_TIMEOUT_MS, {
             method: "POST",
@@ -3018,6 +3018,12 @@ function speakWithGeminiTTS(text) {
                 const blob = pcmToWavBlob(b64);
                 const audio = new Audio(URL.createObjectURL(blob));
                 currentTTSAudio = audio;
+                // Fire onStart the moment playback actually begins, not after
+                // it ends — resolving the outer promise only on "ended"/"error"
+                // (below) so the caller doesn't have to (and can't safely)
+                // wait on the same "ended" event a second time after it has
+                // already fired once.
+                audio.onplay = () => { if (onStart) onStart(); };
                 audio.onended = () => resolve(true);
                 audio.onerror = () => resolve(false);
                 audio.play().catch(() => resolve(false));
@@ -3041,15 +3047,11 @@ function cancelAllSpeaking() {
 // for just that sentence if the Gemini call fails. onStart fires the
 // moment audio actually begins (Gemini audio, or the fallback utterance).
 async function speakSentenceSmart(sentence, langCode, onStart) {
-    const ok = await speakWithGeminiTTS(sentence);
-    if (ok) {
-        if (onStart) onStart();
-        return new Promise((resolve) => {
-            if (!currentTTSAudio) { resolve(); return; }
-            currentTTSAudio.addEventListener("ended", () => resolve(), { once: true });
-            currentTTSAudio.addEventListener("error", () => resolve(), { once: true });
-        });
-    }
+    // speakWithGeminiTTS already resolves only once this sentence's audio has
+    // finished playing (or errored), and fires onStart as soon as playback
+    // actually begins — so there is nothing further to await here.
+    const ok = await speakWithGeminiTTS(sentence, onStart);
+    if (ok) return;
     // Fallback: old browser voice for this sentence only.
     return new Promise((resolve) => {
         if (!("speechSynthesis" in window)) { resolve(); return; }
