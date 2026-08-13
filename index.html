@@ -30,33 +30,18 @@
     <div class="poster-rail poster-rail-right" aria-hidden="true"><div class="poster-rail-track" id="poster-rail-right-track"></div></div>
     <div class="film-grain" aria-hidden="true"></div>
 
-    <div class="brand-logo-center" aria-hidden="true">
-        <span class="brand-logo-mark">🍿</span>
-        <span class="brand-logo-text">PopcornNight.ai</span>
-    </div>
-
     <div class="top-left-actions">
+        <button id="brand-home-btn" class="brand-logo-btn" aria-label="PopcornNight.ai — Go to homepage">
+            <span class="brand-logo-mark">🍿</span>
+            <span class="brand-logo-text">PopcornNight.ai</span>
+        </button>
         <button id="home-btn" class="nav-btn home-btn hidden" aria-label="Home">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                 <polyline points="9 22 9 12 15 12 15 22"></polyline>
             </svg>
         </button>
-        <button id="cinema-mode-btn" class="nav-btn cinema-mode-btn" aria-label="Cinema mode" title="Cinema Mode">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="5"></circle>
-                <line x1="12" y1="1" x2="12" y2="3"></line>
-                <line x1="12" y1="21" x2="12" y2="23"></line>
-                <line x1="4.2" y1="4.2" x2="5.6" y2="5.6"></line>
-                <line x1="18.4" y1="18.4" x2="19.8" y2="19.8"></line>
-                <line x1="1" y1="12" x2="3" y2="12"></line>
-                <line x1="21" y1="12" x2="23" y2="12"></line>
-                <line x1="4.2" y1="19.8" x2="5.6" y2="18.4"></line>
-                <line x1="18.4" y1="5.6" x2="19.8" y2="4.2"></line>
-            </svg>
-        </button>
     </div>
-    <div id="cinema-mode-overlay" class="cinema-mode-overlay hidden" aria-hidden="true"></div>
 
     <div class="top-right-actions">
         <div class="search-container" id="search-container">
@@ -234,6 +219,12 @@
             </div>
 
             <div id="movie-result" class="hidden">
+                <button id="movie-arrow-prev" class="movie-arrow-btn movie-arrow-prev" aria-label="Previous movie" title="Previous">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                </button>
+                <button id="movie-arrow-next" class="movie-arrow-btn movie-arrow-next" aria-label="Next movie" title="Next">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
                 <div class="card-stack-ghost card-stack-ghost-2" aria-hidden="true"></div>
                 <div class="card-stack-ghost card-stack-ghost-1" aria-hidden="true"></div>
                 <div class="movie-card" id="movie-card">
@@ -258,15 +249,18 @@
                                 <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"></path>
                             </svg>
                         </button>
-                        <button id="movie-explain-btn" class="poster-explain-btn" aria-label="Explain this movie">
+                        <button id="movie-explain-btn" class="poster-explain-btn" aria-label="Explain this movie" title="Explain this movie">
                             <span class="explain-btn-icon" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <svg class="explain-icon-speaker" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M11 5 6 9H2v6h4l5 4V5z"></path>
                                     <path d="M15.5 8.5a5 5 0 0 1 0 7"></path>
                                     <path d="M18.5 6a9 9 0 0 1 0 12"></path>
                                 </svg>
+                                <svg class="explain-icon-loading" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                    <circle cx="12" cy="12" r="9" stroke-dasharray="42" stroke-dashoffset="14"></circle>
+                                </svg>
                             </span>
-                            <span id="movie-explain-btn-text" class="explain-btn-text">Explain</span>
+                            <span id="movie-explain-btn-text" class="explain-btn-text sr-only">Explain</span>
                         </button>
                         <button id="movie-chat-fab" class="movie-chat-fab" aria-label="Ask AI about this movie" title="Ask AI">
                             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

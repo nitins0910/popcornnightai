@@ -5,7 +5,11 @@
 // -----------------------------------------------------------
 // 1. TMDB CONFIG
 // -----------------------------------------------------------
-const TMDB_API_KEY = "384b88cd6b95e74c151f88fc28ebb9a5";
+// NOTE: this is intentionally NOT a real key anymore. The real TMDB key
+// now lives only on the Cloudflare Worker (as a secret) and is injected
+// there — it never reaches the browser. This placeholder just keeps the
+// existing "is a key configured?" checks below working correctly.
+const TMDB_API_KEY = "via-worker-proxy";
 const TMDB_BASE_URL = "https://tmdb-proxy.nitins1009.workers.dev/3";
 const TMDB_IMG_URL = "https://image.tmdb.org/t/p/w500";
 const TMDB_BACKDROP_URL = "https://image.tmdb.org/t/p/w780";
@@ -35,9 +39,15 @@ const TMDB_LANG_MAP = { en: "en-US", hi: "hi-IN" };
 //    if that happens, a working Standard key from an older project, like
 //    the one you're using now, is a valid workaround).
 // We send the key BOTH ways below so either format works without editing this file.
-const GEMINI_API_KEY = "AQ.Ab8RN6J0CS4eQ5SIefR7QSQRku0EjnPAthTi_2o6y5CpOPZ6zw";
+// NOTE: this is intentionally NOT a real key anymore. The real Gemini key
+// now lives only on the Cloudflare Worker (as a secret) — it never reaches
+// the browser. This placeholder just keeps the "is a key configured?"
+// checks below working correctly.
+const GEMINI_API_KEY = "via-worker-proxy";
 const GEMINI_MODEL = "gemini-3.5-flash-lite";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+// Requests now go to OUR worker's /gemini/ route instead of Google directly.
+// The worker attaches the real key server-side before forwarding to Google.
+const GEMINI_URL = `${TMDB_BASE_URL.replace("/3", "")}/gemini/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const AI_TYPICAL_QUESTIONS = 5;
 const AI_MAX_QUESTIONS = 8;
 const AI_FETCH_TIMEOUT_MS = 20000;
@@ -55,18 +65,22 @@ const AI_FETCH_TIMEOUT_MS = 20000;
 //    Without a real Client ID, sign-in will show a friendly error instead
 //    of crashing the rest of the app.
 const GOOGLE_CLIENT_ID = "841276363055-ju5n6mugao7mjcosakr5efjocsird0gq.apps.googleusercontent.com";
-const GOOGLE_OAUTH_SCOPE = "openid email profile";
+const GOOGLE_OAUTH_SCOPE = "openid email profile https://www.googleapis.com/auth/drive.appdata";
 const GOOGLE_STATE_KEY = "popcornnight_oauth_state";
 const USER_SESSION_KEY = "popcornnight_user";
+const GOOGLE_TOKEN_KEY = "popcornnight_gtoken";
 let currentUser = null; // { sub, name, email, picture }
+let googleAccessToken = null; // { token, expiresAt } — kept in-memory + sessionStorage this tab
 
 // -----------------------------------------------------------
 // 1d. WISHLIST CONFIG
 // -----------------------------------------------------------
-// Wishlist data is namespaced per Google account (by "sub") and stored in
-// this browser's localStorage — it will follow the user across sessions on
-// THIS device/browser. True cross-device sync would need a real backend
-// (e.g. Firebase/Supabase) wired to the same Google Client ID above.
+// Wishlist data is namespaced per Google account (by "sub") and mirrored in
+// this browser's localStorage for instant offline reads, AND synced to the
+// user's own Google Drive "appDataFolder" (a hidden, app-private space in
+// their Drive) whenever we hold a valid access token — so signing in with
+// the same Google account on a different device pulls the same wishlist
+// down automatically. See syncWishlistFromCloud() / pushWishlistToCloud().
 function wishlistStorageKey() {
     return currentUser ? `popcornnight_wishlist_${currentUser.sub}` : null;
 }
@@ -313,7 +327,7 @@ const TRANSLATIONS = {
         continue_btn: "Bet, Continue →",
         question_counter: "Question {n} of {total}",
         gift_wrapping: "🎬 Clapperboard's rolling...",
-        next_movie_btn: "Skip to next",
+        next_movie_btn: "Back to home",
         swipe_hint: "👈 Swipe the poster left or right for another pick",
         broaden_btn: "Widen The Net 🕸️",
         share_btn: "Share",
@@ -338,6 +352,8 @@ const TRANSLATIONS = {
         select_any: "Select all that apply",
         search_placeholder: "Search movies...",
         no_results: "No movies matched that search — try a different title or spelling.",
+        search_results_heading: "🔍 Results for",
+        search_view_all_btn: "View all results",
         browse_error: "We couldn't load these movies right now. Please try again in a bit.",
         browse_loading: "Rounding up the picks…",
         trending_heading: "🔥 Trending Now",
@@ -473,7 +489,7 @@ const TRANSLATIONS = {
         continue_btn: "आगे बढ़ें →",
         question_counter: "प्रश्न {n} / {total}",
         gift_wrapping: "🎬 क्लैपरबोर्ड चल रहा है...",
-        next_movie_btn: "अगली पर जाएं",
+        next_movie_btn: "होमपेज पर जाएं",
         swipe_hint: "👈 अगली पिक के लिए पोस्टर स्वाइप करें",
         broaden_btn: "दायरा बढ़ाएं 🕸️",
         share_btn: "शेयर करें",
@@ -498,6 +514,8 @@ const TRANSLATIONS = {
         select_any: "जो भी लागू हो, चुनें",
         search_placeholder: "फ़िल्में खोजें...",
         no_results: "इस खोज से कोई फ़िल्म नहीं मिली — कोई और नाम या स्पेलिंग आज़माएं।",
+        search_results_heading: "🔍 खोज परिणाम:",
+        search_view_all_btn: "सभी परिणाम देखें",
         browse_error: "अभी ये फ़िल्में लोड नहीं हो पाईं। कृपया थोड़ी देर में फिर कोशिश करें।",
         browse_loading: "फ़िल्में जुटाई जा रही हैं…",
         trending_heading: "🔥 अभी ट्रेंडिंग",
@@ -786,6 +804,7 @@ const quizScreen = document.getElementById("quiz-screen");
 const revealScreen = document.getElementById("reveal-screen");
 
 const homeBtn = document.getElementById("home-btn");
+const brandHomeBtn = document.getElementById("brand-home-btn");
 const searchToggleBtn = document.getElementById("search-toggle-btn");
 const searchPanel = document.getElementById("search-panel");
 const searchInput = document.getElementById("movie-search-input");
@@ -876,6 +895,8 @@ const streamingPlatforms = document.getElementById("streaming-platforms");
 const streamingNone = document.getElementById("streaming-none");
 const movieError = document.getElementById("movie-error");
 const nextMovieBtn = document.getElementById("next-movie-btn");
+const movieArrowPrevBtn = document.getElementById("movie-arrow-prev");
+const movieArrowNextBtn = document.getElementById("movie-arrow-next");
 const swipeHint = document.getElementById("swipe-hint");
 const broadenBtn = document.getElementById("broaden-btn");
 const shareBtn = document.getElementById("share-btn");
@@ -921,8 +942,6 @@ const homeTrendingHeadingEl = document.querySelector(".home-trending-heading");
 const startSubtitleEl = document.getElementById("start-subtitle");
 
 // Phase 2 enhancement refs
-const cinemaModeBtn = document.getElementById("cinema-mode-btn");
-const cinemaModeOverlay = document.getElementById("cinema-mode-overlay");
 const moodInput = document.getElementById("mood-input");
 const moodSubmitBtn = document.getElementById("mood-submit-btn");
 const moodError = document.getElementById("mood-error");
@@ -1420,6 +1439,19 @@ searchInput.addEventListener("input", (e) => {
     }, 300);
 });
 
+// Enter key = "show me everything", not just the top-8 dropdown preview —
+// opens the same trending-style full grid page for all matches.
+searchInput.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const query = searchInput.value.trim();
+    if (query.length < 2) return;
+    e.preventDefault();
+    clearTimeout(searchTimeout);
+    searchPanel.classList.add("hidden");
+    searchResults.classList.add("hidden");
+    openBrowseScreen("search", null, null, query);
+});
+
 // Matches the query anywhere in the title (not just at the start),
 // e.g. typing "doom" finds "Avengers: Doomsday".
 function rankBySubstring(results, query) {
@@ -1516,13 +1548,30 @@ function renderSearchResults(results, query) {
     });
 
     searchResults.appendChild(frag);
+
+    if (results.length > 8) {
+        const viewAll = document.createElement("button");
+        viewAll.type = "button";
+        viewAll.className = "search-view-all-btn";
+        viewAll.textContent = `${t("search_view_all_btn")} (${results.length})`;
+        viewAll.addEventListener("click", () => {
+            searchPanel.classList.add("hidden");
+            searchResults.classList.add("hidden");
+            openBrowseScreen("search", null, null, query);
+        });
+        searchResults.appendChild(viewAll);
+    }
+
     searchResults.classList.remove("hidden");
 }
 
 // -----------------------------------------------------------
 // 10b. TRENDING, IN-THEATERS & UPCOMING (BOOKMYSHOW-STYLE GRID)
 // -----------------------------------------------------------
-async function openBrowseScreen(mode, regionCode, regionLabel) {
+let lastBrowseMode = null;
+
+async function openBrowseScreen(mode, regionCode, regionLabel, searchQuery) {
+    lastBrowseMode = mode;
     searchPanel.classList.add("hidden");
     browseGrid.innerHTML = "";
     browseError.classList.add("hidden");
@@ -1532,8 +1581,9 @@ async function openBrowseScreen(mode, regionCode, regionLabel) {
         mode === "theaters" ? t("theaters_heading") :
         mode === "upcoming" ? t("upcoming_heading") :
         mode === "wishlist" ? t("wishlist_heading") :
+        mode === "search" ? `${t("search_results_heading")} "${searchQuery}"` :
         t("trending_heading");
-    browseTitleTag.textContent = mode === "theaters" ? "🎟️" : mode === "upcoming" ? "📅" : mode === "wishlist" ? "💖" : "🔥";
+    browseTitleTag.textContent = mode === "theaters" ? "🎟️" : mode === "upcoming" ? "📅" : mode === "wishlist" ? "💖" : mode === "search" ? "🔍" : "🔥";
 
     const isTheaters = mode === "theaters";
     if (locationChangeBtn) {
@@ -1559,6 +1609,30 @@ async function openBrowseScreen(mode, regionCode, regionLabel) {
             return;
         }
         renderBrowseGrid(getWishlist(), "wishlist");
+        return;
+    }
+
+    // Full search-results grid — reuses the same ranked substring-match
+    // search TMDB already powers for the dropdown, but shows every match
+    // (not just the top 8) in the same trending-style grid UI.
+    if (mode === "search") {
+        try {
+            const langParam = TMDB_LANG_MAP[currentLang] || "en-US";
+            const urlPage1 = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(searchQuery)}&language=${langParam}&include_adult=false&page=1`;
+            const urlPage2 = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(searchQuery)}&language=${langParam}&include_adult=false&page=2`;
+            const [page1, page2] = await Promise.allSettled([cachedFetchJson(urlPage1), cachedFetchJson(urlPage2)]);
+            let merged = [];
+            if (page1.status === "fulfilled") merged.push(...(page1.value.results || []));
+            if (page2.status === "fulfilled") merged.push(...(page2.value.results || []));
+            const seen = new Set();
+            merged = merged.filter((m) => (seen.has(m.id) ? false : (seen.add(m.id), true)));
+            renderBrowseGrid(rankBySubstring(merged, searchQuery), "search");
+        } catch (err) {
+            browseError.textContent = t("browse_error");
+            browseError.classList.remove("hidden");
+        } finally {
+            browseLoading.classList.add("hidden");
+        }
         return;
     }
 
@@ -1876,6 +1950,8 @@ function resolveIndustryAndLanguage() {
 
 function goToReveal() {
     if (!state.isAiMode) resolveIndustryAndLanguage();
+    movieHistoryStack = [];
+    movieHistoryIndex = -1;
     showScreen(revealScreen);
     movieResult.classList.add("hidden");
     movieError.classList.add("hidden");
@@ -2271,6 +2347,7 @@ function revealCurrentMovie() {
     renderMovie(movie);
     loadMovieExtras(movie.id);
     maybeShowSwipeHintPulse();
+    pushMovieHistory(movie);
 }
 
 // Nudges first-time visitors that the poster is swipeable, once, then
@@ -2485,7 +2562,6 @@ let nextMovieCooldown = false;
 async function goToNextMovie() {
     if (nextMovieCooldown) return;
     nextMovieCooldown = true;
-    nextMovieBtn.disabled = true;
 
     if (!state.candidates.length && !state.exhaustedPages) {
         await fetchMovies({ reset: false });
@@ -2500,11 +2576,60 @@ async function goToNextMovie() {
 
     setTimeout(() => {
         nextMovieCooldown = false;
-        nextMovieBtn.disabled = false;
     }, 300);
 }
 
-nextMovieBtn.addEventListener("click", goToNextMovie);
+nextMovieBtn.addEventListener("click", goToHomeScreen);
+
+// Desktop prev/next arrows — swipe still free-fetches a new movie each
+// time (unchanged), but the arrows step back/forward through movies
+// already seen this session via a lightweight history stack.
+let movieHistoryStack = [];
+let movieHistoryIndex = -1;
+
+function pushMovieHistory(movie) {
+    if (!movie) return;
+    movieHistoryStack = movieHistoryStack.slice(0, movieHistoryIndex + 1);
+    movieHistoryStack.push(movie);
+    movieHistoryIndex = movieHistoryStack.length - 1;
+    updateArrowButtonsState();
+}
+
+function updateArrowButtonsState() {
+    if (movieArrowPrevBtn) movieArrowPrevBtn.disabled = movieHistoryIndex <= 0;
+    if (movieArrowNextBtn) {
+        // Right arrow is never truly "done" — past the seen history it just
+        // fetches a fresh movie, same as swipe-right.
+        movieArrowNextBtn.disabled = false;
+    }
+}
+
+function goToPreviousMovieArrow() {
+    if (movieHistoryIndex <= 0) return;
+    movieHistoryIndex -= 1;
+    const movie = movieHistoryStack[movieHistoryIndex];
+    state.currentMovie = movie;
+    renderMovie(movie);
+    loadMovieExtras(movie.id);
+    updateArrowButtonsState();
+}
+
+function goToNextMovieArrow() {
+    if (movieHistoryIndex < movieHistoryStack.length - 1) {
+        movieHistoryIndex += 1;
+        const movie = movieHistoryStack[movieHistoryIndex];
+        state.currentMovie = movie;
+        renderMovie(movie);
+        loadMovieExtras(movie.id);
+        updateArrowButtonsState();
+    } else {
+        hapticFeedback(10);
+        goToNextMovie();
+    }
+}
+
+if (movieArrowPrevBtn) movieArrowPrevBtn.addEventListener("click", goToPreviousMovieArrow);
+if (movieArrowNextBtn) movieArrowNextBtn.addEventListener("click", goToNextMovieArrow);
 
 // Swipe Left or Right to skip
 (function setupSwipe() {
@@ -2777,12 +2902,57 @@ function pickVoiceForLang(langCode) {
     if (!("speechSynthesis" in window)) return null;
     const voices = window.speechSynthesis.getVoices() || [];
     if (!voices.length) return null;
-    const prefix = langCode.split("-")[0];
-    return (
-        voices.find((v) => v.lang && v.lang.toLowerCase() === langCode.toLowerCase()) ||
-        voices.find((v) => v.lang && v.lang.toLowerCase().startsWith(prefix)) ||
-        null
-    );
+    const prefix = langCode.split("-")[0].toLowerCase();
+    const langMatches = voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith(prefix));
+    if (!langMatches.length) return null;
+
+    // Prefer the richer, more expressive voices most platforms ship under
+    // recognizable names (Neural/Natural/Wavenet/Google) over the flat,
+    // robotic-sounding default system voice — this alone makes narration
+    // sound far less dead/monotone.
+    const qualityHints = ["neural", "natural", "wavenet", "premium", "enhanced", "google", "online"];
+    const scored = langMatches
+        .map((v) => {
+            const name = (v.name || "").toLowerCase();
+            const exactLang = v.lang.toLowerCase() === langCode.toLowerCase() ? 2 : 0;
+            const qualityScore = qualityHints.some((h) => name.includes(h)) ? 3 : 0;
+            const warmVoiceHint = /female|zira|samantha|susan|aria|neerja|priya/.test(name) ? 1 : 0;
+            return { v, score: exactLang + qualityScore + warmVoiceHint };
+        })
+        .sort((a, b) => b.score - a.score);
+
+    return scored[0].v;
+}
+
+// Gives each spoken sentence a touch of natural prosody instead of one flat
+// monotone rate/pitch for the whole narration — exclamations get brighter
+// and quicker, questions get a little lift, everything else gets a small
+// randomized wobble so back-to-back sentences don't sound machine-identical.
+function expressiveProsodyFor(sentence) {
+    const trimmed = (sentence || "").trim();
+    let pitch = 1.0;
+    let rate = 1.0;
+
+    if (/[!]\s*$/.test(trimmed)) {
+        pitch = 1.13;
+        rate = 1.07;
+    } else if (/\?\s*$/.test(trimmed)) {
+        pitch = 1.07;
+        rate = 0.97;
+    } else {
+        pitch = 1.0 + (Math.random() * 0.06 - 0.02);
+        rate = 0.96 + Math.random() * 0.09;
+    }
+
+    if (/\b(amazing|incredible|heartbreaking|thrilling|hilarious|shocking|beautiful|masterpiece|unforgettable|epic|devastating|gripping)\b/i.test(trimmed)) {
+        pitch += 0.05;
+        rate += 0.02;
+    }
+
+    return {
+        pitch: Math.max(0.7, Math.min(1.6, pitch)),
+        rate: Math.max(0.82, Math.min(1.25, rate))
+    };
 }
 
 let explainPersona = "eli5"; // "eli5" | "critic"
@@ -2864,7 +3034,9 @@ function speakQueue(sentences, langCode, onFirstStart, onAllDone) {
         utterance.lang = langCode;
         const voice = pickVoiceForLang(langCode);
         if (voice) utterance.voice = voice;
-        utterance.rate = 1;
+        const prosody = expressiveProsodyFor(sentences[i]);
+        utterance.rate = prosody.rate;
+        utterance.pitch = prosody.pitch;
         utterance.onstart = () => {
             if (!startedOnce) { startedOnce = true; onFirstStart(); }
         };
@@ -2986,7 +3158,9 @@ async function explainMovie(movie) {
             utterance.lang = langCode;
             const voice = pickVoiceForLang(langCode);
             if (voice) utterance.voice = voice;
-            utterance.rate = 1;
+            const prosody = expressiveProsodyFor(next);
+            utterance.rate = prosody.rate;
+            utterance.pitch = prosody.pitch;
             utterance.onstart = () => setExplainBtnState("speaking");
             utterance.onend = () => { queueRunning = false; pump(); };
             utterance.onerror = () => { queueRunning = false; pump(); };
@@ -3039,33 +3213,42 @@ async function explainBrowseCard(movie, btnEl) {
 
     browseExplainBusy = true;
     btnEl.classList.add("is-loading");
+    const langCode = TMDB_LANG_MAP[currentLang] || "en-US";
 
     try {
-        const text = await callGeminiText(buildExplainPrompt(movie));
+        const cached = getCachedExplain(movie, explainPersona);
+        const text = cached || (await callGeminiText(buildExplainPrompt(movie, explainPersona)));
         if (!browseExplainBusy) return;
+        if (!cached) setCachedExplain(movie, explainPersona, text);
 
-        const utterance = new SpeechSynthesisUtterance(text);
-        const langCode = TMDB_LANG_MAP[currentLang] || "en-US";
-        utterance.lang = langCode;
-        const voice = pickVoiceForLang(langCode);
-        if (voice) utterance.voice = voice;
-        utterance.rate = 1;
+        const sentences = splitIntoSentences(text);
+        let i = 0;
 
-        utterance.onstart = () => {
-            btnEl.classList.remove("is-loading");
-            btnEl.classList.add("is-speaking");
-        };
-        utterance.onend = () => {
-            browseExplainBusy = false;
-            btnEl.classList.remove("is-loading", "is-speaking");
-        };
-        utterance.onerror = () => {
-            browseExplainBusy = false;
-            btnEl.classList.remove("is-loading", "is-speaking");
-        };
+        function speakNext() {
+            if (!browseExplainBusy) return;
+            if (i >= sentences.length) {
+                browseExplainBusy = false;
+                btnEl.classList.remove("is-loading", "is-speaking");
+                return;
+            }
+            const utterance = new SpeechSynthesisUtterance(sentences[i]);
+            utterance.lang = langCode;
+            const voice = pickVoiceForLang(langCode);
+            if (voice) utterance.voice = voice;
+            const prosody = expressiveProsodyFor(sentences[i]);
+            utterance.rate = prosody.rate;
+            utterance.pitch = prosody.pitch;
+            utterance.onstart = () => {
+                btnEl.classList.remove("is-loading");
+                btnEl.classList.add("is-speaking");
+            };
+            utterance.onend = () => { i += 1; speakNext(); };
+            utterance.onerror = () => { i += 1; speakNext(); };
+            window.speechSynthesis.speak(utterance);
+        }
 
         window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance);
+        speakNext();
     } catch (err) {
         browseExplainBusy = false;
         btnEl.classList.remove("is-loading", "is-speaking");
@@ -3090,6 +3273,12 @@ function randomOauthState() {
 }
 
 function googleRedirectUri() {
+    // Must exactly match an entry under "Authorized redirect URIs" for this
+    // Client ID in Google Cloud Console. Using origin + pathname (not just
+    // origin) means it correctly matches wherever this file is actually
+    // deployed — including inside a subfolder (e.g. https://you.github.io/
+    // popcornnight/) — instead of assuming the app always lives at the
+    // domain root.
     return window.location.origin + window.location.pathname;
 }
 
@@ -3140,6 +3329,7 @@ async function handleGoogleAuthRedirect() {
 
     const hashParams = new URLSearchParams(window.location.hash.slice(1));
     const accessToken = hashParams.get("access_token");
+    const expiresIn = parseInt(hashParams.get("expires_in"), 10) || 3600;
     const returnedState = hashParams.get("state");
 
     let expectedState = null;
@@ -3172,8 +3362,13 @@ async function handleGoogleAuthRedirect() {
         try {
             localStorage.setItem(USER_SESSION_KEY, JSON.stringify(currentUser));
         } catch (e) {}
+        storeGoogleAccessToken(accessToken, expiresIn);
         renderAccountUI();
         updateWishlistCountBadge();
+        // Fresh sign-in on THIS device/browser = the moment we have a valid
+        // Drive token, so pull down anything saved from other devices and
+        // reconcile with whatever's local here.
+        syncWishlistFromCloud();
         return true;
     } catch (e) {
         showMovieHomeToast("⚠️ Couldn't complete Google sign-in. Please try again.");
@@ -3190,6 +3385,140 @@ function restoreSavedGoogleSession() {
             updateWishlistCountBadge();
         }
     } catch (e) {}
+    restoreGoogleAccessToken();
+    // If this tab still holds a non-expired token from earlier (e.g. a
+    // page refresh rather than a brand-new sign-in), keep syncing with it.
+    if (currentUser && getValidAccessToken()) syncWishlistFromCloud();
+}
+
+// --- Google access token: kept in-memory + mirrored to sessionStorage so
+//     it survives a page refresh within the same browser tab (but never
+//     leaks to a new tab/device — that's expected; a fresh sign-in there
+//     is what triggers the cloud pull for that device). ---
+function storeGoogleAccessToken(token, expiresInSeconds) {
+    googleAccessToken = { token, expiresAt: Date.now() + expiresInSeconds * 1000 - 60000 };
+    try {
+        sessionStorage.setItem(GOOGLE_TOKEN_KEY, JSON.stringify(googleAccessToken));
+    } catch (e) {}
+}
+
+function restoreGoogleAccessToken() {
+    try {
+        const saved = sessionStorage.getItem(GOOGLE_TOKEN_KEY);
+        if (saved) googleAccessToken = JSON.parse(saved);
+    } catch (e) {}
+}
+
+function getValidAccessToken() {
+    if (!googleAccessToken || !googleAccessToken.token) return null;
+    if (Date.now() >= googleAccessToken.expiresAt) return null;
+    return googleAccessToken.token;
+}
+
+// --- Google Drive appDataFolder wishlist sync (no custom backend needed —
+//     appDataFolder is a private, hidden space in the signed-in user's own
+//     Drive that only this app can see) ---
+const DRIVE_WISHLIST_FILENAME = "popcornnight_wishlist.json";
+const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
+const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3/files";
+
+async function driveFindWishlistFile(token) {
+    const url = `${DRIVE_API}?spaces=appDataFolder&q=${encodeURIComponent(
+        `name='${DRIVE_WISHLIST_FILENAME}'`
+    )}&fields=files(id,name)`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error("drive-list-failed");
+    const data = await res.json();
+    return (data.files && data.files[0] && data.files[0].id) || null;
+}
+
+async function driveDownloadWishlist(token, fileId) {
+    const res = await fetch(`${DRIVE_API}/${fileId}?alt=media`, {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error("drive-download-failed");
+    try {
+        return await res.json();
+    } catch (e) {
+        return [];
+    }
+}
+
+async function driveUploadWishlist(token, fileId, list) {
+    const body = JSON.stringify(list);
+    if (fileId) {
+        const res = await fetch(`${DRIVE_UPLOAD_API}/${fileId}?uploadType=media`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body
+        });
+        if (!res.ok) throw new Error("drive-update-failed");
+        return fileId;
+    }
+    const metadata = { name: DRIVE_WISHLIST_FILENAME, parents: ["appDataFolder"] };
+    const boundary = "popcornnight_boundary_" + Math.random().toString(36).slice(2);
+    const multipartBody =
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+        `--${boundary}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${boundary}--`;
+    const res = await fetch(`${DRIVE_UPLOAD_API}?uploadType=multipart`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": `multipart/related; boundary=${boundary}` },
+        body: multipartBody
+    });
+    if (!res.ok) throw new Error("drive-create-failed");
+    const created = await res.json();
+    return created.id;
+}
+
+let driveWishlistFileId = null;
+let cloudSyncInFlight = false;
+
+// Pulls the cloud copy (if any), merges it with whatever's local on this
+// device (union by movie id — nothing is silently dropped from either
+// side), saves the merged result locally, then pushes that merge back up
+// so both copies agree.
+async function syncWishlistFromCloud() {
+    const token = getValidAccessToken();
+    if (!token || !currentUser || cloudSyncInFlight) return;
+    cloudSyncInFlight = true;
+    try {
+        driveWishlistFileId = await driveFindWishlistFile(token);
+        const cloudList = driveWishlistFileId ? await driveDownloadWishlist(token, driveWishlistFileId) : [];
+        const localList = getWishlist();
+
+        const merged = [...localList];
+        const seenIds = new Set(localList.map((m) => m.id));
+        (Array.isArray(cloudList) ? cloudList : []).forEach((m) => {
+            if (m && m.id && !seenIds.has(m.id)) {
+                merged.push(m);
+                seenIds.add(m.id);
+            }
+        });
+
+        saveWishlist(merged);
+        updateWishlistCountBadge();
+        if (browseScreen && !browseScreen.classList.contains("hidden") && lastBrowseMode === "wishlist") {
+            renderBrowseGrid(merged, "wishlist");
+        }
+        driveWishlistFileId = await driveUploadWishlist(token, driveWishlistFileId, merged);
+    } catch (e) {
+        // Offline, token expired mid-flight, or Drive hiccup — the local
+        // wishlist still works fine, we just skip syncing this time.
+    } finally {
+        cloudSyncInFlight = false;
+    }
+}
+
+// Fire-and-forget push, called after every local wishlist change.
+async function pushWishlistToCloud(list) {
+    const token = getValidAccessToken();
+    if (!token || !currentUser) return;
+    try {
+        if (!driveWishlistFileId) driveWishlistFileId = await driveFindWishlistFile(token);
+        driveWishlistFileId = await driveUploadWishlist(token, driveWishlistFileId, list);
+    } catch (e) {
+        // Will simply retry on the next change, or reconcile at next sign-in.
+    }
 }
 
 function signOutUser() {
@@ -3267,6 +3596,7 @@ function saveWishlist(list) {
     try {
         localStorage.setItem(key, JSON.stringify(list));
     } catch (e) {}
+    pushWishlistToCloud(list);
 }
 
 function isInWishlist(movieId) {
@@ -3433,23 +3763,57 @@ function hapticFeedback(pattern) {
 }
 
 // --- Cinema / Dim mode toggle ---
-(function setupCinemaMode() {
-    if (!cinemaModeBtn) return;
-    let active = false;
-    try { active = localStorage.getItem("popcornnight_cinema_mode") === "1"; } catch (e) {}
-    function apply() {
-        document.body.classList.toggle("cinema-mode", active);
-        cinemaModeBtn.classList.toggle("active", active);
-        if (cinemaModeOverlay) cinemaModeOverlay.classList.toggle("active", active);
-    }
-    apply();
-    cinemaModeBtn.addEventListener("click", () => {
-        active = !active;
-        apply();
-        hapticFeedback(8);
-        try { localStorage.setItem("popcornnight_cinema_mode", active ? "1" : "0"); } catch (e) {}
+// --- Cursor drag-to-scroll for horizontal rails (desktop mouse users don't
+//     get a touch swipe, so without this the only way to scroll was the
+//     old-looking native scrollbar) ---
+function enableDragScroll(el) {
+    if (!el) return;
+    let isDown = false;
+    let startX = 0;
+    let startScroll = 0;
+    let moved = false;
+
+    el.addEventListener("mousedown", (e) => {
+        isDown = true;
+        moved = false;
+        startX = e.pageX;
+        startScroll = el.scrollLeft;
+        el.classList.add("is-dragging");
     });
-})();
+
+    window.addEventListener("mouseup", () => {
+        if (!isDown) return;
+        isDown = false;
+        el.classList.remove("is-dragging");
+        // Swallow the click that follows a real drag so a dragged card
+        // doesn't also get "clicked" open.
+        if (moved) {
+            const suppressClick = (ev) => {
+                ev.stopPropagation();
+                ev.preventDefault();
+            };
+            el.addEventListener("click", suppressClick, { capture: true, once: true });
+            setTimeout(() => el.removeEventListener("click", suppressClick, { capture: true }), 0);
+        }
+    });
+
+    window.addEventListener("mousemove", (e) => {
+        if (!isDown) return;
+        const dx = e.pageX - startX;
+        if (Math.abs(dx) > 4) moved = true;
+        el.scrollLeft = startScroll - dx;
+    });
+
+    el.addEventListener("mouseleave", () => {
+        if (isDown) {
+            isDown = false;
+            el.classList.remove("is-dragging");
+        }
+    });
+}
+
+enableDragScroll(homeTrendingStrip);
+enableDragScroll(homeRecentStrip);
 
 // --- Dynamic poster-as-color-theme (Canvas dominant color extraction) ---
 function extractPosterAccentColor(imgEl, wrapEl) {
@@ -4029,6 +4393,9 @@ async function loadSharedMovie(movieId) {
         state.currentMovie = movieLike;
         renderMovie(movieLike);
         loadMovieExtras(movieLike.id);
+        movieHistoryStack = [];
+        movieHistoryIndex = -1;
+        pushMovieHistory(movieLike);
     } catch (err) {
         showMovieError(t("error_network"));
     }
@@ -4038,7 +4405,7 @@ async function loadSharedMovie(movieId) {
 // 18. FILM REEL STRIP
 // -----------------------------------------------------------
 const FILM_REEL_TRACK = document.getElementById("film-reel-track");
-const FILM_REEL_POSTER_COUNT = 14;
+const FILM_REEL_POSTER_COUNT = 26;
 
 async function loadFilmReel() {
     if (!FILM_REEL_TRACK) return;
@@ -4047,10 +4414,17 @@ async function loadFilmReel() {
 
     if (TMDB_API_KEY && TMDB_API_KEY !== "YOUR_TMDB_API_KEY_HERE") {
         try {
-            const randomPage = Math.floor(Math.random() * 20) + 1;
+            // Pull from several different endpoints/pages (each with its own
+            // random page number) so the pool is large and genuinely varies
+            // between loads, instead of the same ~20 trending titles every
+            // time — that's what was making the reel look repetitive.
+            const randomPage = () => Math.floor(Math.random() * 25) + 1;
             const urls = [
-                `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&language=en-US&page=${randomPage}`,
-                `${TMDB_BASE_URL}/trending/movie/week?api_key=${TMDB_API_KEY}&page=1`
+                `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&language=en-US&page=${randomPage()}`,
+                `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&language=en-US&page=${randomPage()}`,
+                `${TMDB_BASE_URL}/movie/top_rated?api_key=${TMDB_API_KEY}&language=en-US&page=${randomPage()}`,
+                `${TMDB_BASE_URL}/movie/now_playing?api_key=${TMDB_API_KEY}&language=en-US&page=${randomPage()}`,
+                `${TMDB_BASE_URL}/trending/movie/week?api_key=${TMDB_API_KEY}&page=${Math.floor(Math.random() * 3) + 1}`
             ];
 
             const responses = await Promise.allSettled(urls.map((url) => cachedFetchJson(url)));
@@ -4075,10 +4449,22 @@ async function loadFilmReel() {
         } catch (err) {}
     }
 
-    posterItems = posterItems.sort(() => Math.random() - 0.5);
+    posterItems = shuffleArray(posterItems);
     renderFilmReel(posterItems.slice(0, FILM_REEL_POSTER_COUNT));
     renderPosterRails(posterItems.slice(FILM_REEL_POSTER_COUNT, FILM_REEL_POSTER_COUNT + 24));
     startMobileHeroBackdrop(posterItems);
+}
+
+// Fisher-Yates — proper unbiased shuffle (Array.sort(() => Math.random()-0.5)
+// is a well-known biased shuffle that clumps items and can look "samey"
+// across reloads, which fed into the reel-repetition complaint too).
+function shuffleArray(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
 }
 
 // --- Responsive hero background: on mobile/tablet (where the desktop-only
@@ -4170,7 +4556,12 @@ function renderFilmReel(posterItems) {
     const frag = document.createDocumentFragment();
     const loadPromises = [];
 
-    [...posterItems, ...posterItems].forEach((item) => {
+    // The track needs two back-to-back laps for the CSS marquee to loop
+    // seamlessly (structurally unavoidable), but the second lap is an
+    // independently-shuffled ordering of the same pool rather than an
+    // identical copy — so scrolling through doesn't visibly repeat the
+    // exact same sequence twice in a row.
+    [...posterItems, ...shuffleArray(posterItems)].forEach((item) => {
         const frame = document.createElement("div");
         frame.className = "reel-frame";
         const img = document.createElement("img");
@@ -4247,16 +4638,17 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("focus", restartReelAnimation);
 
 // Global top-left home event binder
-if (homeBtn) {
-    homeBtn.addEventListener("click", () => {
-        if (window.history && window.history.replaceState) {
-            const url = new URL(window.location.href);
-            url.searchParams.delete("movie");
-            window.history.replaceState({}, "", url);
-        }
-        showScreen(startScreen);
-    });
+function goToHomeScreen() {
+    if (window.history && window.history.replaceState) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("movie");
+        window.history.replaceState({}, "", url);
+    }
+    showScreen(startScreen);
 }
+
+if (homeBtn) homeBtn.addEventListener("click", goToHomeScreen);
+if (brandHomeBtn) brandHomeBtn.addEventListener("click", goToHomeScreen);
 
 // -----------------------------------------------------------
 // 19. INIT

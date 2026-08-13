@@ -115,32 +115,31 @@ body {
     gap: 10px;
 }
 
-/* --- CENTERED BRAND MARK ---
-   Sits in the open space at the top of the stage, big and unmissable,
-   instead of the small corner wordmark it replaced. */
-.brand-logo-center {
+/* --- BRAND MARK (top-left, clickable → home) ---
+   Desktop/tablet only — on phones the top bar is tight enough already
+   (see mobile fixes below), so the wordmark is dropped there entirely. */
+.brand-logo-btn {
     display: none;
-    position: fixed;
-    top: 18px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 30;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    background: none;
+    border: none;
+    padding: 4px 6px;
+    margin-right: 2px;
+    cursor: pointer;
     user-select: none;
-    pointer-events: none;
 }
 
-.brand-logo-center .brand-logo-mark {
-    font-size: clamp(1.6rem, 2.6vw, 2.4rem);
+.brand-logo-btn .brand-logo-mark {
+    font-size: 1.5rem;
     line-height: 1;
     filter: drop-shadow(0 2px 6px rgba(0,0,0,0.45));
 }
 
-.brand-logo-center .brand-logo-text {
+.brand-logo-btn .brand-logo-text {
     font-family: var(--font-display);
-    letter-spacing: 0.06em;
-    font-size: clamp(1.9rem, 3.4vw, 2.9rem);
+    letter-spacing: 0.05em;
+    font-size: 1.25rem;
     line-height: 1;
     white-space: nowrap;
     background: linear-gradient(135deg, var(--gold-bright), var(--pink-bright));
@@ -148,10 +147,15 @@ body {
     background-clip: text;
     color: transparent;
     text-shadow: 0 2px 20px rgba(255, 46, 136, 0.3);
+    transition: filter 0.2s ease;
 }
 
-@media (min-width: 640px) {
-    .brand-logo-center { display: flex; }
+.brand-logo-btn:hover .brand-logo-text {
+    filter: brightness(1.15);
+}
+
+@media (min-width: 768px) {
+    .brand-logo-btn { display: flex; }
 }
 
 .top-right-actions {
@@ -384,6 +388,25 @@ body {
     font-size: 0.75rem;
     color: var(--ink-faint);
 }
+
+.search-view-all-btn {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    padding: 9px;
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255, 210, 63, 0.08);
+    color: var(--gold-bright);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 0 0 6px 6px;
+    transition: background 0.15s ease;
+}
+.search-view-all-btn:hover { background: rgba(255, 210, 63, 0.18); }
 
 /* --- MAIN CONTAINER --- */
 .container {
@@ -1705,9 +1728,9 @@ h1, h2, h3 {
         margin: 10px auto;
         width: 95%;
     }
-    
-    .top-left-actions { top: 10px; left: 10px; gap: 7px; }
-    .top-right-actions { top: 10px; right: 10px; gap: 6px; }
+
+    .top-left-actions { top: 10px; left: 10px; gap: 6px; }
+    .top-right-actions { top: 10px; right: 10px; gap: 5px; max-width: calc(100vw - 20px); }
     .nav-btn { padding: 6px 7px; }
     .nav-btn svg { width: 16px; height: 16px; }
     #lang-select { padding: 6px 6px; font-size: 0.75rem; }
@@ -1726,6 +1749,33 @@ h1, h2, h3 {
 
 @media (min-width: 600px) {
     .container { max-width: 640px; padding: 36px 42px 28px; }
+}
+
+/* --- Phone-width top bar de-clutter ---
+   Trending/In-Theaters/Upcoming already have full-size equivalents as
+   quick-chips on the homescreen itself (#home-quick-chips), so on phones
+   they're dropped from the fixed corner bar entirely — that's what was
+   crowding/overlapping there in the first place with 7+ icons fighting
+   for ~340px of width. Search, Wishlist, Settings and the account button
+   stay since they don't have an on-screen equivalent elsewhere. */
+@media (max-width: 640px) {
+    #trending-btn, #theaters-btn, #upcoming-btn {
+        display: none;
+    }
+    .top-right-actions {
+        flex-wrap: nowrap;
+    }
+    #google-signin-btn-text {
+        display: none;
+    }
+    .google-signin-btn {
+        padding: 8px;
+    }
+    /* Push page content clear of the fixed top bars so titles/eyebrows
+       never sit underneath the buttons. */
+    #start-screen, #quiz-screen, #browse-screen {
+        padding-top: 40px;
+    }
 }
 
 @media (min-width: 900px) {
@@ -1926,7 +1976,8 @@ h1, h2, h3 {
    AI MOVIE CHAT + EXPLAIN
    ========================================================= */
 
-/* --- Explain button (top-left of the poster) --- */
+/* --- Explain button (top-left of the poster) — icon-only circular button,
+   matching the wishlist heart button's shape/size for visual consistency --- */
 .poster-explain-btn {
     position: absolute;
     top: 10px;
@@ -1934,26 +1985,38 @@ h1, h2, h3 {
     z-index: 3;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    height: 30px;
-    padding: 0 10px 0 8px;
-    border-radius: 999px;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 50%;
     background: rgba(10, 10, 12, 0.6);
     backdrop-filter: blur(8px);
     border: 1px solid rgba(255,255,255,0.35);
     color: var(--cream);
     cursor: pointer;
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    white-space: nowrap;
     transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
 .poster-explain-btn:hover {
     background: var(--velvet);
     border-color: var(--gold-bright);
+    transform: scale(1.08);
+}
+
+/* Visually-hidden but still readable by screen readers / used internally
+   to hold the current state label (Preparing.../Speaking...) without
+   showing text in the UI, per the icon-only design. */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 .poster-explain-btn .explain-btn-icon {
@@ -1961,9 +2024,21 @@ h1, h2, h3 {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    position: relative;
+    width: 17px;
+    height: 17px;
 }
 
-.poster-explain-btn.is-loading .explain-btn-icon {
+.explain-icon-speaker, .explain-icon-loading {
+    position: absolute;
+    inset: 0;
+    transition: opacity 0.15s ease;
+}
+.explain-icon-loading { opacity: 0; }
+
+.poster-explain-btn.is-loading .explain-icon-speaker { opacity: 0; }
+.poster-explain-btn.is-loading .explain-icon-loading {
+    opacity: 1;
     animation: explainSpin 0.9s linear infinite;
 }
 
@@ -2553,13 +2628,27 @@ h1, h2, h3 {
     display: flex;
     gap: 10px;
     overflow-x: auto;
-    padding-bottom: 6px;
+    padding-bottom: 10px;
     scroll-snap-type: x proximity;
     -webkit-overflow-scrolling: touch;
+    cursor: grab;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 210, 63, 0.35) transparent;
+}
+.home-trending-strip.is-dragging {
+    cursor: grabbing;
+    scroll-snap-type: none;
+    user-select: none;
 }
 
-.home-trending-strip::-webkit-scrollbar { height: 5px; }
-.home-trending-strip::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 999px; }
+.home-trending-strip::-webkit-scrollbar { height: 4px; }
+.home-trending-strip::-webkit-scrollbar-track { background: transparent; }
+.home-trending-strip::-webkit-scrollbar-thumb {
+    background: rgba(255, 210, 63, 0.3);
+    border-radius: 999px;
+    transition: background 0.2s ease;
+}
+.home-trending-strip:hover::-webkit-scrollbar-thumb { background: rgba(255, 210, 63, 0.55); }
 
 .home-trending-item {
     flex: 0 0 auto;
@@ -2686,28 +2775,6 @@ h1, h2, h3 {
 @media (min-width: 1300px) {
     .mobile-hero-backdrop { display: none; }
 }
-
-/* --- Cinema / Dim mode --- */
-.cinema-mode-btn svg { transition: transform 0.3s ease, color 0.3s ease; }
-.cinema-mode-btn.active { color: var(--gold-bright); }
-.cinema-mode-btn.active svg { transform: rotate(180deg); }
-.cinema-mode-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 40;
-    background: rgba(4, 2, 10, 0.82);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.5s ease;
-}
-.cinema-mode-overlay.active { opacity: 1; }
-body.cinema-mode #movie-result,
-body.cinema-mode .movie-card {
-    position: relative;
-    z-index: 41;
-}
-body.cinema-mode .top-left-actions,
-body.cinema-mode .top-right-actions { z-index: 42; position: relative; }
 
 /* --- Dynamic poster-as-color-theme --- */
 .poster-wrap {
@@ -2996,6 +3063,39 @@ body.cinema-mode .top-right-actions { z-index: 42; position: relative; }
     text-decoration: none;
 }
 .ticket-affiliate-link.hidden { display: none; }
+
+/* --- Desktop-only prev/next arrows either side of the movie card --- */
+.movie-arrow-btn {
+    display: none;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 6;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 10, 12, 0.55);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: var(--cream);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+}
+.movie-arrow-btn:hover { background: var(--velvet); border-color: var(--gold-bright); transform: translateY(-50%) scale(1.08); }
+.movie-arrow-btn:disabled { opacity: 0.25; cursor: default; }
+.movie-arrow-btn:disabled:hover { background: rgba(10, 10, 12, 0.55); border-color: rgba(255,255,255,0.25); transform: translateY(-50%); }
+.movie-arrow-prev { left: -58px; }
+.movie-arrow-next { right: -58px; }
+
+@media (min-width: 900px) and (pointer: fine) {
+    .movie-arrow-btn { display: flex; }
+}
+@media (min-width: 900px) and (max-width: 1180px) {
+    .movie-arrow-prev { left: -14px; }
+    .movie-arrow-next { right: -14px; }
+}
 
 /* --- Haptic: no visual CSS needed, JS-only via navigator.vibrate --- */
 
