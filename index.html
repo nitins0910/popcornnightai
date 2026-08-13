@@ -156,6 +156,25 @@
                 <button id="random-btn" class="btn secondary wildcard-btn">Random Drop 🎲</button>
             </div>
 
+            <div id="quick-actions-grid" class="quick-actions-grid">
+                <button class="home-chip quick-action-card qa-watchparty" id="chip-watchparty" data-mode="watchparty">
+                    <span class="qa-icon" aria-hidden="true">🎉</span>
+                    <span class="qa-label">Watch Party</span>
+                </button>
+                <button class="home-chip quick-action-card qa-trending" id="chip-trending" data-mode="trending">
+                    <span class="qa-icon" aria-hidden="true">🔥</span>
+                    <span class="qa-label">Trending</span>
+                </button>
+                <button class="home-chip quick-action-card qa-theaters" id="chip-theaters" data-mode="theaters">
+                    <span class="qa-icon" aria-hidden="true">🎟️</span>
+                    <span class="qa-label">In Theaters</span>
+                </button>
+                <button class="home-chip quick-action-card qa-upcoming" id="chip-upcoming" data-mode="upcoming">
+                    <span class="qa-icon" aria-hidden="true">📅</span>
+                    <span class="qa-label">Coming Soon</span>
+                </button>
+            </div>
+
             <div id="resume-chip" class="resume-chip hidden">
                 <img id="resume-chip-poster" class="resume-chip-poster" src="" alt="">
                 <div class="resume-chip-text">
@@ -173,11 +192,7 @@
             <p id="mood-error" class="mood-error hidden"></p>
 
             <div id="home-quick-chips" class="home-quick-chips">
-                <button class="home-chip" id="chip-trending" data-mode="trending">🔥 Trending</button>
-                <button class="home-chip" id="chip-theaters" data-mode="theaters">🎟️ In Theaters</button>
-                <button class="home-chip" id="chip-upcoming" data-mode="upcoming">📅 Coming Soon</button>
                 <button class="home-chip" id="chip-wishlist" data-mode="wishlist">💖 Wishlist</button>
-                <button class="home-chip" id="chip-watchparty" data-mode="watchparty">🎉 Watch Party</button>
             </div>
 
             <div id="ott-select-section" class="ott-select-section">
@@ -442,21 +457,51 @@
         </div>
     </div>
 
-    <div id="watchparty-modal" class="settings-modal hidden">
+    <div id="watchparty-modal" class="watchparty-fullscreen hidden">
         <div class="settings-modal-backdrop" id="watchparty-modal-backdrop"></div>
-        <div class="settings-modal-box watchparty-modal-box">
-            <button id="watchparty-modal-close" class="trailer-modal-close" aria-label="Close">✕</button>
-            <h3 class="settings-modal-title">🎉 Watch Party Mode</h3>
-            <div id="watchparty-setup" class="watchparty-setup">
-                <p id="watchparty-desc" class="watchparty-desc">Answer a few quick taste questions, share the room link with a friend, and we'll merge both picks into one recommendation — works from two separate phones.</p>
-                <div id="watchparty-room-row" class="watchparty-room-row">
-                    <span class="watchparty-room-label">Room Code</span>
-                    <span id="watchparty-room-code" class="watchparty-room-code">------</span>
-                    <button id="watchparty-copy-btn" class="ghost-btn" type="button">Copy Link</button>
+        <div class="watchparty-fullscreen-box">
+            <button id="watchparty-modal-close" class="trailer-modal-close watchparty-close-btn" aria-label="Close">✕</button>
+
+            <div id="watchparty-lobby" class="watchparty-lobby">
+                <div class="watchparty-lobby-main">
+                    <h3 class="settings-modal-title watchparty-title">🎉 Watch Party</h3>
+                    <p id="watchparty-desc" class="watchparty-desc">Enter your name, then create a room or join one with a code — everyone answers a few AI-picked questions and we'll find movies the whole group will like.</p>
+
+                    <div class="watchparty-name-row">
+                        <input type="text" id="watchparty-name-input" class="watchparty-name-input" placeholder="Your name" maxlength="20" autocomplete="off">
+                    </div>
+
+                    <div id="watchparty-entry-block" class="watchparty-entry-block">
+                        <button id="watchparty-create-btn" class="btn ticket-btn watchparty-create-btn" type="button">🎬 Create a Room</button>
+                        <div class="watchparty-divider"><span>or</span></div>
+                        <div class="watchparty-join-block">
+                            <input type="text" id="watchparty-code-input" class="watchparty-code-input" placeholder="Enter room code" maxlength="6" autocomplete="off" autocapitalize="characters">
+                            <button id="watchparty-join-btn" class="btn ticket-btn watchparty-join-btn" type="button">Join</button>
+                        </div>
+                    </div>
+
+                    <div id="watchparty-room-row" class="watchparty-room-row hidden">
+                        <span class="watchparty-room-label">Room Code</span>
+                        <span id="watchparty-room-code" class="watchparty-room-code">------</span>
+                        <button id="watchparty-copy-btn" class="ghost-btn" type="button">Copy Link</button>
+                    </div>
+
+                    <button id="watchparty-start-btn" class="btn ticket-btn watchparty-start-btn hidden" type="button">Start Party 🚀</button>
+                    <p id="watchparty-host-hint" class="watchparty-host-hint hidden"></p>
                 </div>
+
+                <div id="watchparty-players-col" class="watchparty-players-col hidden">
+                    <h4 class="watchparty-players-title">👥 In the room</h4>
+                    <div id="watchparty-players-list" class="watchparty-players-list"></div>
+                </div>
+            </div>
+
+            <div id="watchparty-setup" class="watchparty-setup hidden">
+                <h3 class="settings-modal-title watchparty-title">🎬 A Few Quick Questions</h3>
                 <div id="watchparty-questions" class="watchparty-questions"></div>
                 <button id="watchparty-next-btn" class="btn ticket-btn watchparty-next-btn">Continue →</button>
             </div>
+
             <div id="watchparty-result" class="watchparty-result hidden"></div>
         </div>
     </div>

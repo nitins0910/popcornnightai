@@ -411,7 +411,7 @@ body {
 /* --- MAIN CONTAINER --- */
 .container {
     width: 92%;
-    max-width: 620px;
+    max-width: 660px;
     background: var(--surface);
     padding: clamp(24px, 5vw, 38px) clamp(18px, 5vw, 34px) 26px;
     border-radius: var(--radius);
@@ -600,6 +600,82 @@ h1, h2, h3 {
     gap: 12px;
     width: 100%;
     margin-top: 8px;
+}
+
+/* --- Quick-action cards: Watch Party / Trending / In Theaters / Coming
+   Soon, promoted up next to the two main CTAs with their own bold
+   gradient "graphic" look instead of being small plain-text pills. --- */
+.quick-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    width: 100%;
+    margin-top: 16px;
+}
+
+.quick-action-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 14px 6px 12px;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.05);
+    color: var(--cream);
+    font-family: var(--font-body);
+    cursor: pointer;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.quick-action-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    opacity: 0.22;
+    transition: opacity 0.2s ease;
+}
+
+.quick-action-card:hover,
+.quick-action-card:focus-visible {
+    transform: translateY(-3px) scale(1.02);
+    border-color: rgba(255,255,255,0.35);
+    box-shadow: 0 10px 26px rgba(0,0,0,0.4);
+}
+.quick-action-card:hover::before { opacity: 0.34; }
+
+.qa-icon {
+    font-size: 1.6rem;
+    line-height: 1;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4));
+    position: relative;
+    z-index: 1;
+}
+
+.qa-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    position: relative;
+    z-index: 1;
+}
+
+.qa-watchparty::before { background: linear-gradient(160deg, #ff2e88, #7b2ff7); }
+.qa-trending::before { background: linear-gradient(160deg, #ff6a3d, #ffd23f); }
+.qa-theaters::before { background: linear-gradient(160deg, #2fd6c0, #1f7ae0); }
+.qa-upcoming::before { background: linear-gradient(160deg, #a06bff, #4a2fd6); }
+
+.qa-watchparty { border-color: rgba(255,46,136,0.45); }
+.qa-trending { border-color: rgba(255,210,63,0.45); }
+.qa-theaters { border-color: rgba(47,214,192,0.4); }
+.qa-upcoming { border-color: rgba(160,107,255,0.4); }
+
+@media (max-width: 420px) {
+    .quick-actions-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 .btn {
@@ -1909,7 +1985,7 @@ h1, h2, h3 {
        floating in the middle of it and leaving a dead empty strip out to
        the screen edge. Clamped so posters never get too cramped or, at
        the other extreme, blown up unnaturally large. */
-    width: clamp(60px, calc(50vw - 500px - 40px), 180px);
+    width: clamp(48px, calc(50vw - 540px - 40px), 140px);
     z-index: 1;
     overflow: hidden;
     pointer-events: none;
@@ -1978,14 +2054,14 @@ h1, h2, h3 {
 }
 
 @media (min-width: 1440px) {
-    .container { max-width: 1200px; }
+    .container { max-width: 1320px; }
     .browse-grid { grid-template-columns: repeat(7, 1fr); }
-    .poster-rail { width: clamp(60px, calc(50vw - 600px - 40px), 200px); }
+    .poster-rail { width: clamp(48px, calc(50vw - 660px - 40px), 150px); }
 }
 
 @media (min-width: 1800px) {
-    .container { max-width: 1300px; }
-    .poster-rail { width: clamp(70px, calc(50vw - 650px - 40px), 240px); }
+    .container { max-width: 1440px; }
+    .poster-rail { width: clamp(56px, calc(50vw - 720px - 40px), 180px); }
     .poster-rail-left { left: 24px; }
     .poster-rail-right { right: 24px; }
     .poster-rail-track { animation-duration: 60s; }
@@ -3016,7 +3092,7 @@ h1, h2, h3 {
     border-radius: 999px;
     cursor: pointer;
 }
-.compare-modal-box, .watchparty-modal-box { text-align: left; }
+.compare-modal-box { text-align: left; }
 .compare-modal-desc { font-size: 13px; opacity: 0.7; margin: 6px 0 14px; }
 .compare-input { width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
 .compare-submit-btn { width: 100%; }
@@ -3046,26 +3122,138 @@ h1, h2, h3 {
 /* --- Recently Viewed rail (reuses home-trending-strip styles) --- */
 #home-recently-viewed-section { margin-top: 10px; }
 
-/* --- Watch Party --- */
-.watchparty-desc { font-size: 13px; opacity: 0.75; margin-bottom: 14px; line-height: 1.5; }
-.watchparty-room-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+/* --- Watch Party (fullscreen lobby + AI questions + shared result grid) --- */
+.watchparty-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 260;
+    display: flex;
+}
+.watchparty-fullscreen-box {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    margin: 0 auto;
+    max-width: 1100px;
+    background: linear-gradient(180deg, rgba(23,10,46,0.98), rgba(12,4,23,0.99));
+    overflow-y: auto;
+    padding: clamp(20px, 5vw, 48px) clamp(18px, 5vw, 56px) 40px;
+    animation: scaleIn 0.2s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+.watchparty-close-btn { position: fixed; top: 18px; right: 18px; z-index: 5; }
+.watchparty-title { text-align: left; margin: 0 0 6px; }
+
+/* Lobby: form on the left, connected-players column on the right */
+.watchparty-lobby {
+    display: flex;
+    gap: 36px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    margin-top: 30px;
+}
+.watchparty-lobby-main { flex: 1 1 340px; min-width: 280px; max-width: 440px; }
+.watchparty-desc { font-size: 13.5px; opacity: 0.75; margin-bottom: 20px; line-height: 1.6; text-align: left; }
+.watchparty-name-row { margin-bottom: 18px; }
+.watchparty-name-input,
+.watchparty-code-input {
+    width: 100%;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 12px;
+    padding: 13px 15px;
+    color: var(--cream);
+    font-family: var(--font-body);
+    font-size: 14px;
+}
+.watchparty-name-input:focus, .watchparty-code-input:focus { border-color: var(--gold); outline: none; }
+.watchparty-code-input { text-transform: uppercase; letter-spacing: 0.12em; }
+.watchparty-entry-block { display: flex; flex-direction: column; gap: 4px; }
+.watchparty-create-btn { width: 100%; }
+.watchparty-divider { display: flex; align-items: center; gap: 10px; margin: 16px 0; font-size: 12px; opacity: 0.55; }
+.watchparty-divider::before, .watchparty-divider::after { content: ""; flex: 1; height: 1px; background: rgba(255,255,255,0.15); }
+.watchparty-join-block { display: flex; gap: 8px; }
+.watchparty-join-block .watchparty-code-input { flex: 1; }
+.watchparty-join-btn { width: auto; padding-left: 20px; padding-right: 20px; }
+.watchparty-room-row { display: flex; align-items: center; gap: 10px; margin: 20px 0 10px; }
 .watchparty-room-label { font-size: 12px; opacity: 0.6; }
-.watchparty-room-code { font-family: "JetBrains Mono", monospace; letter-spacing: 0.15em; font-weight: 700; color: var(--gold-bright); font-size: 15px; }
-.watchparty-questions { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
-.watchparty-question-block { display: flex; flex-direction: column; gap: 6px; }
-.watchparty-question-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
-.watchparty-option-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.watchparty-room-code { font-family: "JetBrains Mono", monospace; letter-spacing: 0.15em; font-weight: 700; color: var(--gold-bright); font-size: 17px; }
+.watchparty-start-btn { width: 100%; margin-top: 14px; }
+.watchparty-host-hint { font-size: 12.5px; opacity: 0.65; margin-top: 12px; text-align: left; }
+
+.watchparty-players-col {
+    flex: 0 0 220px;
+    border-left: 1px solid rgba(255,255,255,0.12);
+    padding-left: 28px;
+    min-height: 200px;
+}
+.watchparty-players-title { font-size: 13px; letter-spacing: 0.04em; margin: 0 0 14px; opacity: 0.8; text-align: left; }
+.watchparty-players-list { display: flex; flex-direction: column; gap: 10px; }
+.watchparty-player-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 13px;
+    text-align: left;
+}
+.watchparty-player-avatar {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(100deg, var(--gold-bright), var(--pink-bright));
+    color: #1a0a10;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 12px;
+    flex-shrink: 0;
+}
+.watchparty-player-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watchparty-player-host-badge { font-size: 10px; opacity: 0.6; }
+.watchparty-player-status { font-size: 14px; }
+
+/* AI question screen */
+.watchparty-setup { max-width: 520px; margin: 30px auto 0; }
+.watchparty-questions { display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px; }
+.watchparty-question-block { display: flex; flex-direction: column; gap: 8px; }
+.watchparty-question-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; text-align: left; }
+.watchparty-option-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .watchparty-option {
-    padding: 7px 13px;
+    padding: 9px 15px;
     border-radius: 999px;
     border: 1px solid rgba(255,255,255,0.14);
     background: rgba(255,255,255,0.04);
-    font-size: 12.5px;
+    color: var(--cream);
+    font-size: 13px;
     cursor: pointer;
 }
 .watchparty-option.selected { background: linear-gradient(100deg, var(--gold-bright), var(--pink-bright)); color: #1a0a10; font-weight: 600; border-color: transparent; }
 .watchparty-next-btn { width: 100%; }
-.watchparty-result { font-size: 14px; line-height: 1.6; }
+
+/* Waiting / result screen */
+.watchparty-result { font-size: 14px; line-height: 1.6; max-width: 900px; margin: 30px auto 0; text-align: center; }
+.watchparty-waiting-title { font-size: 15px; margin-bottom: 18px; }
+.watchparty-waiting-list { display: flex; flex-direction: column; gap: 8px; max-width: 320px; margin: 0 auto; }
+.watchparty-waiting-row { display: flex; align-items: center; gap: 10px; font-size: 13.5px; text-align: left; padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,0.04); }
+.watchparty-group-reason { font-size: 14.5px; opacity: 0.85; margin: 0 0 22px; line-height: 1.6; }
+.watchparty-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    text-align: left;
+}
+@media (min-width: 640px) {
+    .watchparty-grid { grid-template-columns: repeat(3, 1fr); gap: 18px; }
+}
+@media (min-width: 900px) {
+    .watchparty-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (max-width: 680px) {
+    .watchparty-lobby { flex-direction: column; }
+    .watchparty-players-col { border-left: none; border-top: 1px solid rgba(255,255,255,0.12); padding-left: 0; padding-top: 20px; flex: 1 1 auto; width: 100%; }
+}
 
 /* --- Affiliate ticket link --- */
 .ticket-affiliate-link {

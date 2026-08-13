@@ -452,6 +452,10 @@ const TRANSLATIONS = {
         chip_theaters: "🎟️ In Theaters",
         chip_upcoming: "📅 Coming Soon",
         chip_wishlist: "💖 Wishlist",
+        qa_trending: "Trending",
+        qa_theaters: "In Theaters",
+        qa_upcoming: "Coming Soon",
+        qa_watchparty: "Watch Party",
         home_trending_heading: "🔥 Trending Right Now",
         settings_title: "⚙️ Settings",
         settings_language_label: "Language",
@@ -472,8 +476,6 @@ const TRANSLATIONS = {
         watchparty_room_label: "Room Code",
         watchparty_copy_btn: "Copy Link",
         watchparty_continue_btn: "Continue →",
-        watchparty_player_a: "Your turn — answer a few quick questions",
-        watchparty_player_b: "You've joined the room! Answer a few quick questions",
         watchparty_waiting: "Waiting for your friend to answer on their phone... this updates automatically, keep this open.",
         watchparty_share_hint: "Share this room code or link with your friend so they can join from their own phone.",
         watchparty_room_not_found: "This watch party room wasn't found or has expired. Ask your friend to start a new one.",
@@ -618,6 +620,10 @@ const TRANSLATIONS = {
         chip_theaters: "🎟️ थिएटर में",
         chip_upcoming: "📅 जल्द आ रही",
         chip_wishlist: "💖 विशलिस्ट",
+        qa_trending: "ट्रेंडिंग",
+        qa_theaters: "थिएटर में",
+        qa_upcoming: "जल्द आ रही",
+        qa_watchparty: "वॉच पार्टी",
         home_trending_heading: "🔥 अभी ट्रेंडिंग में",
         settings_title: "⚙️ सेटिंग्स",
         settings_language_label: "भाषा",
@@ -638,8 +644,6 @@ const TRANSLATIONS = {
         watchparty_room_label: "रूम कोड",
         watchparty_copy_btn: "लिंक कॉपी करें",
         watchparty_continue_btn: "आगे बढ़ें →",
-        watchparty_player_a: "आपकी बारी — कुछ सवालों के जवाब दें",
-        watchparty_player_b: "आप रूम में शामिल हो गए! कुछ सवालों के जवाब दें",
         watchparty_waiting: "आपके दोस्त के जवाब का इंतज़ार हो रहा है... ये अपने आप अपडेट होगा, इसे खुला रखें।",
         watchparty_share_hint: "ये रूम कोड या लिंक अपने दोस्त को भेजें ताकि वो अपने फोन से जुड़ सके।",
         watchparty_room_not_found: "ये वॉच पार्टी रूम नहीं मिला या एक्सपायर हो गया। दोस्त से नया रूम शुरू करने को कहें।",
@@ -1027,10 +1031,21 @@ const chipWatchparty = document.getElementById("chip-watchparty");
 const watchpartyModal = document.getElementById("watchparty-modal");
 const watchpartyModalBackdrop = document.getElementById("watchparty-modal-backdrop");
 const watchpartyModalClose = document.getElementById("watchparty-modal-close");
+const watchpartyLobby = document.getElementById("watchparty-lobby");
 const watchpartySetup = document.getElementById("watchparty-setup");
 const watchpartyDesc = document.getElementById("watchparty-desc");
+const watchpartyNameInput = document.getElementById("watchparty-name-input");
+const watchpartyEntryBlock = document.getElementById("watchparty-entry-block");
+const watchpartyCreateBtn = document.getElementById("watchparty-create-btn");
+const watchpartyCodeInput = document.getElementById("watchparty-code-input");
+const watchpartyJoinBtn = document.getElementById("watchparty-join-btn");
+const watchpartyRoomRow = document.getElementById("watchparty-room-row");
 const watchpartyRoomCode = document.getElementById("watchparty-room-code");
 const watchpartyCopyBtn = document.getElementById("watchparty-copy-btn");
+const watchpartyStartBtn = document.getElementById("watchparty-start-btn");
+const watchpartyHostHint = document.getElementById("watchparty-host-hint");
+const watchpartyPlayersCol = document.getElementById("watchparty-players-col");
+const watchpartyPlayersList = document.getElementById("watchparty-players-list");
 const watchpartyQuestions = document.getElementById("watchparty-questions");
 const watchpartyNextBtn = document.getElementById("watchparty-next-btn");
 const watchpartyResult = document.getElementById("watchparty-result");
@@ -1191,7 +1206,13 @@ function applyStaticTranslations() {
     if (settingsLanguageLabel) settingsLanguageLabel.textContent = t("settings_language_label");
     document.querySelectorAll(".home-chip").forEach((chip) => {
         const mode = chip.dataset.mode;
-        if (mode) chip.textContent = t(`chip_${mode}`);
+        if (!mode) return;
+        if (chip.classList.contains("quick-action-card")) {
+            const label = chip.querySelector(".qa-label");
+            if (label) label.textContent = t(`qa_${mode}`);
+        } else {
+            chip.textContent = t(`chip_${mode}`);
+        }
     });
     if (homeTrendingHeadingEl) homeTrendingHeadingEl.textContent = t("home_trending_heading");
     if (resumeChip && !resumeChip.classList.contains("hidden")) {
@@ -2437,6 +2458,32 @@ function maybeShowSwipeHintPulse() {
     } catch (e) {}
 }
 
+// Called for any movie whose card is open but has no TMDB overview at all
+// (neither from the list result nor the fuller details endpoint). Asks
+// Gemini to write a short, spoiler-free description and swaps it in place
+// of the "no description available" placeholder once ready — only if the
+// user is still looking at this same movie by the time it comes back.
+async function generateAiOverviewFor(movie, movieId) {
+    if (!movie || movie._aiOverviewAttempted) return;
+    movie._aiOverviewAttempted = true;
+    try {
+        const langLabel = currentLang === "hi" ? "Hindi" : "English";
+        const year = movie.release_date ? ` (${String(movie.release_date).slice(0, 4)})` : "";
+        const prompt = `Write a short, spoiler-free, engaging 2-3 sentence description in ${langLabel} for the movie "${movie.title}"${year}. Reply with ONLY strict JSON: {"overview": "..."}`;
+        const parsed = await callGemini(prompt);
+        const text = parsed && parsed.overview ? String(parsed.overview).trim() : "";
+        if (!text) return;
+        movie.overview = text;
+        movie._aiOverview = true;
+        if (state.currentMovie && state.currentMovie.id === movieId) {
+            movieOverview.textContent = movie._aiReason ? `🎬 ${movie._aiReason}\n\n✨ ${text}` : `✨ ${text}`;
+        }
+    } catch (e) {
+        // Silent failure — the "no description available" placeholder set
+        // by renderMovie() already covers this case gracefully.
+    }
+}
+
 function renderMovie(movie) {
     movieError.classList.add("hidden");
     broadenBtn.classList.add("hidden");
@@ -2545,6 +2592,21 @@ async function loadMovieExtras(movieId) {
     ]);
 
     if (!state.currentMovie || state.currentMovie.id !== movieId) return;
+
+    // Some TMDB entries (esp. regional titles or new releases) have no
+    // overview at all. If the search result we already had didn't have one,
+    // check the fuller /movie/{id} details response too — and if that's
+    // *also* empty, have Gemini write a short one so the card never shows
+    // "no description available" when we can do better.
+    const detailOverview = (detailsRes.status === "fulfilled" && detailsRes.value.overview) || "";
+    if (detailOverview && !state.currentMovie.overview) {
+        state.currentMovie.overview = detailOverview;
+        movieOverview.textContent = state.currentMovie._aiReason
+            ? `🎬 ${state.currentMovie._aiReason}\n\n${detailOverview}`
+            : detailOverview;
+    } else if (!detailOverview && !state.currentMovie.overview) {
+        generateAiOverviewFor(state.currentMovie, movieId);
+    }
 
     if (detailsRes.status === "fulfilled" && detailsRes.value.runtime) {
         movieRuntime.textContent = t("runtime_label", { min: detailsRes.value.runtime });
@@ -3910,11 +3972,15 @@ async function renderHomeTrendingStrip() {
     }
 }
 
-if (homeQuickChips) {
-    homeQuickChips.addEventListener("click", (e) => {
+// Delegated on the whole start screen (not just #home-quick-chips) so this
+// also covers the Trending / In Theaters / Coming Soon quick-action cards
+// that now live up next to the Let's Cook / Random Drop buttons.
+if (startScreen) {
+    startScreen.addEventListener("click", (e) => {
         const chip = e.target.closest(".home-chip");
         if (!chip) return;
         const mode = chip.dataset.mode;
+        if (mode === "watchparty") return; // has its own dedicated handler
         if (mode === "theaters") {
             theatersBtnHandler();
         } else {
@@ -3930,7 +3996,13 @@ function initHomescreen() {
     if (homeTrendingHeadingEl) homeTrendingHeadingEl.textContent = t("home_trending_heading");
     document.querySelectorAll(".home-chip").forEach((chip) => {
         const mode = chip.dataset.mode;
-        if (mode) chip.textContent = t(`chip_${mode}`);
+        if (!mode) return;
+        if (chip.classList.contains("quick-action-card")) {
+            const label = chip.querySelector(".qa-label");
+            if (label) label.textContent = t(`qa_${mode}`);
+        } else {
+            chip.textContent = t(`chip_${mode}`);
+        }
     });
     renderRecentlyViewedRail();
     renderOttChips();
@@ -4370,26 +4442,50 @@ async function searchMovieByTitle(title) {
 }
 
 // --- Watch Party Mode (real cross-device room, via our Worker + KV) ---
-// Room state lives server-side under /party/<code>: { answersA, answersB,
-// result, updatedAt }. Whoever creates the room is "Player A"; whoever
-// opens the shared ?party=CODE link is "Player B". Once both sets of
-// answers are in, whichever side notices first (its own submit, or the
-// other side's poll) asks Gemini for a merged pick and publishes the
-// result back to the room so both phones show the same answer.
+// Room state lives server-side under /party/<code>:
+//   {
+//     hostId,                 // playerId of whoever created the room
+//     players: {               // keyed by a random per-device playerId
+//       [playerId]: { name, joinedAt, done, answers }
+//     },
+//     started,                 // true once the host has locked the lobby
+//     questions,                // AI-generated question set, shared by everyone
+//     result,                   // { groupReason, movies: [...] } once computed
+//     updatedAt
+//   }
+// Any number of people can join a room from their own phone by typing the
+// room code (or opening the shared link). The host starts the round once
+// everyone's in; Gemini writes a fresh set of quick-tap questions for that
+// specific group, then — once every player has answered — Gemini is asked
+// again for a shared shortlist of movies that fits the whole group, which
+// is published back to the room so every device shows the same grid.
 const PARTY_API = `${TMDB_BASE_URL.replace("/3", "")}/party`;
 
 (function setupWatchParty() {
     if (!chipWatchparty) return;
-    const PARTY_QUESTIONS = [
-        { key: "genre", title: "Pick a genre", options: ["Action", "Comedy", "Romance", "Horror", "Thriller", "Drama"] },
-        { key: "mood", title: "Tonight's mood", options: ["Laugh 😂", "Cry 😭", "Thrill 😱", "Chill 😌"] },
-        { key: "era", title: "Any era preference?", options: ["Latest", "2010s", "2000s", "Classics", "No preference"] }
-    ];
-    let myRole = "a"; // "a" = room creator, "b" = joined via shared link
-    let myAnswers = {};
+
+    let myPlayerId = "";
+    let myName = "";
     let roomCode = "";
+    let isHost = false;
+    let myAnswers = {};
+    let questions = null;
     let pollTimer = null;
-    let computeAttempted = false;
+    let hostComputeAttempted = false;
+    let fallbackComputeTimer = null;
+
+    function getOrCreatePlayerId() {
+        try {
+            let id = localStorage.getItem("popcornnight_party_player_id");
+            if (!id) {
+                id = `p_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+                localStorage.setItem("popcornnight_party_player_id", id);
+            }
+            return id;
+        } catch (e) {
+            return `p_${Math.random().toString(36).slice(2, 10)}`;
+        }
+    }
 
     function genRoomCode() {
         return Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -4402,8 +4498,9 @@ const PARTY_API = `${TMDB_BASE_URL.replace("/3", "")}/party`;
         return await res.json();
     }
 
-    // Server merges this patch into whatever's already stored for the
-    // room (creating it if it doesn't exist yet) and returns the result.
+    // Server-side merge: safe to call repeatedly from many devices — see
+    // worker.js, which deep-merges the "players" key so simultaneous
+    // patches from different people don't stomp each other.
     async function patchRoom(code, patch) {
         const res = await fetch(`${PARTY_API}/${encodeURIComponent(code)}`, {
             method: "PUT",
@@ -4417,11 +4514,216 @@ const PARTY_API = `${TMDB_BASE_URL.replace("/3", "")}/party`;
     function stopPolling() {
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = null;
+        if (fallbackComputeTimer) clearTimeout(fallbackComputeTimer);
+        fallbackComputeTimer = null;
     }
 
-    function renderQuestions(answersRef) {
+    function resolveMyName() {
+        let saved = "";
+        try {
+            saved = localStorage.getItem("popcornnight_party_name") || "";
+        } catch (e) {}
+        return (currentUser && currentUser.name) || saved || "";
+    }
+
+    function rememberMyName(name) {
+        try {
+            localStorage.setItem("popcornnight_party_name", name);
+        } catch (e) {}
+    }
+
+    // -------- Screen switching --------
+    function showLobbyScreen() {
+        watchpartyLobby.classList.remove("hidden");
+        watchpartySetup.classList.add("hidden");
+        watchpartyResult.classList.add("hidden");
+        watchpartyResult.innerHTML = "";
+    }
+    function showQuestionsScreen() {
+        watchpartyLobby.classList.add("hidden");
+        watchpartySetup.classList.remove("hidden");
+        watchpartyResult.classList.add("hidden");
+    }
+    function showResultScreen() {
+        watchpartyLobby.classList.add("hidden");
+        watchpartySetup.classList.add("hidden");
+        watchpartyResult.classList.remove("hidden");
+    }
+
+    // -------- Lobby rendering --------
+    function renderPlayersList(room) {
+        const players = (room && room.players) || {};
+        const ids = Object.keys(players);
+        if (!ids.length) {
+            watchpartyPlayersCol.classList.add("hidden");
+            return;
+        }
+        watchpartyPlayersCol.classList.remove("hidden");
+        watchpartyPlayersList.innerHTML = "";
+        ids
+            .sort((a, b) => (players[a].joinedAt || 0) - (players[b].joinedAt || 0))
+            .forEach((id) => {
+                const p = players[id];
+                const chip = document.createElement("div");
+                chip.className = "watchparty-player-chip";
+                const initial = (p.name || "?").trim().charAt(0).toUpperCase() || "?";
+                const isThisHost = room.hostId === id;
+                chip.innerHTML = `
+                    <span class="watchparty-player-avatar">${initial}</span>
+                    <span class="watchparty-player-name">${p.name || "Guest"}${id === myPlayerId ? " (you)" : ""}</span>
+                    ${isThisHost ? '<span class="watchparty-player-host-badge">HOST</span>' : ""}
+                    <span class="watchparty-player-status">${p.done ? "✅" : "⏳"}</span>
+                `;
+                watchpartyPlayersList.appendChild(chip);
+            });
+    }
+
+    async function pollLobbyOnce() {
+        try {
+            const room = await fetchRoom(roomCode);
+            if (!room) return;
+            renderPlayersList(room);
+            isHost = room.hostId === myPlayerId;
+            watchpartyStartBtn.classList.toggle("hidden", !isHost);
+            watchpartyHostHint.classList.toggle("hidden", isHost);
+            if (!isHost) {
+                watchpartyHostHint.textContent = currentLang === "hi"
+                    ? "होस्ट के पार्टी शुरू करने का इंतज़ार करें..."
+                    : "Waiting for the host to start the party...";
+            }
+            if (room.started && room.questions) {
+                questions = room.questions;
+                stopPolling();
+                enterQuestionsScreen();
+            }
+        } catch (e) {
+            // offline / worker hiccup — try again next tick
+        }
+    }
+
+    function enterLobby(freshRoomCode, asHost) {
+        stopPolling();
+        roomCode = freshRoomCode;
+        isHost = asHost;
+        myAnswers = {};
+        questions = null;
+        hostComputeAttempted = false;
+        watchpartyRoomCode.textContent = roomCode;
+        watchpartyRoomRow.classList.remove("hidden");
+        watchpartyEntryBlock.classList.add("hidden");
+        watchpartyStartBtn.classList.toggle("hidden", !asHost);
+        watchpartyHostHint.classList.toggle("hidden", asHost);
+        if (!asHost) {
+            watchpartyHostHint.textContent = currentLang === "hi"
+                ? "होस्ट के पार्टी शुरू करने का इंतज़ार करें..."
+                : "Waiting for the host to start the party...";
+        }
+        watchpartyDesc.textContent = currentLang === "hi"
+            ? "यह कोड अपने दोस्तों को भेजें ताकि वो भी जुड़ सकें — जुड़ने वालों के नाम दाईं तरफ़ दिखेंगे।"
+            : "Share this code with friends so they can join too — everyone who joins shows up on the right.";
+        showLobbyScreen();
+        watchpartyModal.classList.remove("hidden");
+        pollLobbyOnce();
+        pollTimer = setInterval(pollLobbyOnce, 2500);
+    }
+
+    // -------- Create / Join --------
+    async function createRoom() {
+        const name = (watchpartyNameInput.value || "").trim();
+        if (!name) {
+            watchpartyNameInput.focus();
+            showToast(currentLang === "hi" ? "पहले अपना नाम लिखें" : "Enter your name first");
+            return;
+        }
+        rememberMyName(name);
+        myName = name;
+        const code = genRoomCode();
+        try {
+            await patchRoom(code, {
+                hostId: myPlayerId,
+                started: false,
+                players: { [myPlayerId]: { name: myName, joinedAt: Date.now(), done: false, answers: null } }
+            });
+            enterLobby(code, true);
+        } catch (e) {
+            showToast(t("chat_error"));
+        }
+    }
+
+    async function joinRoom(codeInput) {
+        const name = (watchpartyNameInput.value || "").trim();
+        const code = (codeInput || "").trim().toUpperCase();
+        if (!name) {
+            watchpartyNameInput.focus();
+            showToast(currentLang === "hi" ? "पहले अपना नाम लिखें" : "Enter your name first");
+            return;
+        }
+        if (!code) {
+            watchpartyCodeInput.focus();
+            return;
+        }
+        rememberMyName(name);
+        myName = name;
+        try {
+            const existing = await fetchRoom(code);
+            if (!existing) {
+                showToast(t("watchparty_room_not_found") || (currentLang === "hi" ? "यह रूम नहीं मिला।" : "Room not found."));
+                return;
+            }
+            await patchRoom(code, {
+                players: { [myPlayerId]: { name: myName, joinedAt: Date.now(), done: false, answers: null } }
+            });
+            enterLobby(code, existing.hostId === myPlayerId);
+        } catch (e) {
+            showToast(t("chat_error"));
+        }
+    }
+
+    // -------- AI-generated questions (host writes them once, for everyone) --------
+    async function generatePartyQuestions(room) {
+        const names = Object.values(room.players || {}).map((p) => p.name).filter(Boolean);
+        const langLabel = currentLang === "hi" ? "Hindi (Devanagari script)" : "English";
+        const prompt = `You are designing a quick, fun 3-question tap-to-answer taste quiz for a group watch-party inside a movie app. The people in the room: ${names.join(", ") || "a group of friends"}.
+
+Write exactly 3 short, punchy questions (each with 4 short tap-able options) that will help figure out one movie the whole group will enjoy together. Cover things like genre, mood/vibe, and era/pacing — vary the wording so it feels fresh, not generic. Keep question titles under 6 words and options under 3 words each. Reply in ${langLabel}.
+
+Reply with ONLY strict JSON matching this shape:
+{"questions": [{"key": "q1", "title": "...", "options": ["...", "...", "...", "..."]}, {"key": "q2", "title": "...", "options": [...]}, {"key": "q3", "title": "...", "options": [...]}]}`;
+        try {
+            const parsed = await callGemini(prompt);
+            if (parsed && Array.isArray(parsed.questions) && parsed.questions.length) {
+                return parsed.questions;
+            }
+        } catch (e) {}
+        // Fallback to a safe static set if Gemini is unavailable.
+        return [
+            { key: "genre", title: currentLang === "hi" ? "जॉनर चुनें" : "Pick a genre", options: ["Action", "Comedy", "Romance", "Thriller"] },
+            { key: "mood", title: currentLang === "hi" ? "आज का मूड" : "Tonight's mood", options: ["Laugh 😂", "Cry 😭", "Thrill 😱", "Chill 😌"] },
+            { key: "era", title: currentLang === "hi" ? "कौन सा दौर?" : "Any era preference?", options: ["Latest", "2010s", "Classics", "No preference"] }
+        ];
+    }
+
+    async function startParty() {
+        watchpartyStartBtn.disabled = true;
+        try {
+            const room = await fetchRoom(roomCode);
+            if (!room) throw new Error("no-room");
+            const generated = await generatePartyQuestions(room);
+            const published = await patchRoom(roomCode, { started: true, questions: generated });
+            questions = published.questions || generated;
+            stopPolling();
+            enterQuestionsScreen();
+        } catch (e) {
+            showToast(t("chat_error"));
+        } finally {
+            watchpartyStartBtn.disabled = false;
+        }
+    }
+
+    // -------- Question answering --------
+    function renderQuestions() {
         watchpartyQuestions.innerHTML = "";
-        PARTY_QUESTIONS.forEach((q) => {
+        (questions || []).forEach((q) => {
             const block = document.createElement("div");
             block.className = "watchparty-question-block";
             const title = document.createElement("div");
@@ -4430,13 +4732,13 @@ const PARTY_API = `${TMDB_BASE_URL.replace("/3", "")}/party`;
             block.appendChild(title);
             const row = document.createElement("div");
             row.className = "watchparty-option-row";
-            q.options.forEach((opt) => {
+            (q.options || []).forEach((opt) => {
                 const btn = document.createElement("button");
                 btn.type = "button";
-                btn.className = "watchparty-option" + (answersRef[q.key] === opt ? " selected" : "");
+                btn.className = "watchparty-option";
                 btn.textContent = opt;
                 btn.addEventListener("click", () => {
-                    answersRef[q.key] = opt;
+                    myAnswers[q.key] = opt;
                     row.querySelectorAll(".watchparty-option").forEach((b) => b.classList.remove("selected"));
                     btn.classList.add("selected");
                     hapticFeedback(6);
@@ -4448,154 +4750,193 @@ const PARTY_API = `${TMDB_BASE_URL.replace("/3", "")}/party`;
         });
     }
 
-    function showSetupScreen() {
-        watchpartySetup.classList.remove("hidden");
-        watchpartyResult.classList.add("hidden");
-        watchpartyResult.innerHTML = "";
+    function enterQuestionsScreen() {
+        renderQuestions();
+        showQuestionsScreen();
     }
 
-    function showWaitingScreen(message) {
-        stopPolling();
-        watchpartySetup.classList.add("hidden");
-        watchpartyResult.classList.remove("hidden");
+    // -------- Waiting for everyone to finish --------
+    function renderWaitingScreen(room) {
+        showResultScreen();
         watchpartyResult.innerHTML = "";
-        const p = document.createElement("p");
-        p.textContent = message;
-        watchpartyResult.appendChild(p);
-        if (roomCode) {
-            const codeRow = document.createElement("p");
-            codeRow.className = "watchparty-room-code";
-            codeRow.textContent = roomCode;
-            watchpartyResult.appendChild(codeRow);
-        }
-        pollTimer = setInterval(pollRoomOnce, 3000);
-    }
+        const title = document.createElement("p");
+        title.className = "watchparty-waiting-title";
+        title.textContent = currentLang === "hi"
+            ? "बाकी लोगों के जवाब का इंतज़ार हो रहा है..."
+            : "Waiting for everyone else to finish...";
+        watchpartyResult.appendChild(title);
 
-    function renderPartyResult(result) {
-        stopPolling();
-        watchpartySetup.classList.add("hidden");
-        watchpartyResult.classList.remove("hidden");
-        watchpartyResult.innerHTML = "";
-        const p = document.createElement("p");
-        p.textContent = `🎬 ${result.title} — ${result.reason || ""}`;
-        watchpartyResult.appendChild(p);
-        if (result.movieId) {
-            const btn = document.createElement("button");
-            btn.className = "btn ticket-btn watchparty-next-btn";
-            btn.textContent = "🍿 Watch This";
-            btn.addEventListener("click", () => {
-                watchpartyModal.classList.add("hidden");
-                loadSharedMovie(result.movieId);
+        const list = document.createElement("div");
+        list.className = "watchparty-waiting-list";
+        const players = (room && room.players) || {};
+        Object.keys(players)
+            .sort((a, b) => (players[a].joinedAt || 0) - (players[b].joinedAt || 0))
+            .forEach((id) => {
+                const p = players[id];
+                const row = document.createElement("div");
+                row.className = "watchparty-waiting-row";
+                row.textContent = `${p.done ? "✅" : "⏳"} ${p.name || "Guest"}${id === myPlayerId ? " (you)" : ""}`;
+                list.appendChild(row);
             });
-            watchpartyResult.appendChild(btn);
-        }
+        watchpartyResult.appendChild(list);
     }
 
-    // Called after my own submit, and on every poll tick, to decide what
-    // this screen should show right now based on the room's current state.
-    async function reactToRoomState(room) {
-        if (!room) {
-            showWaitingScreen(t("watchparty_room_not_found"));
-            stopPolling();
-            return;
-        }
-        if (room.result) {
-            renderPartyResult(room.result);
-            return;
-        }
-        if (room.answersA && room.answersB) {
-            if (!computeAttempted) {
-                computeAttempted = true;
-                await computeAndPublishResult(room.answersA, room.answersB);
-            }
-            return;
-        }
-        // Still missing one side's answers — keep waiting/polling.
-        showWaitingScreen(t("watchparty_waiting"));
-    }
-
-    async function pollRoomOnce() {
-        try {
-            const room = await fetchRoom(roomCode);
-            await reactToRoomState(room);
-        } catch (e) {
-            // Offline or Worker hiccup — just try again on the next tick.
-        }
-    }
-
-    async function computeAndPublishResult(answersA, answersB) {
-        watchpartySetup.classList.add("hidden");
-        watchpartyResult.classList.remove("hidden");
+    // -------- Movie grid result, shared by the whole room --------
+    function renderGridResult(result) {
+        stopPolling();
+        showResultScreen();
         watchpartyResult.innerHTML = "";
-        watchpartyResult.textContent = t("watchparty_finding");
-        try {
-            const prompt = `Two friends are picking a movie together tonight. Their quick taste answers:
-Player 1: ${JSON.stringify(answersA)}
-Player 2: ${JSON.stringify(answersB)}
 
-Suggest ONE well-known real movie both would likely enjoy, blending their tastes (compromise where they differ). Reply with ONLY a JSON object: {"title": "movie title", "reason": "one short sentence explaining the pick, in ${currentLang === "hi" ? "Hindi" : "English"}"}`;
+        if (result.groupReason) {
+            const reason = document.createElement("p");
+            reason.className = "watchparty-group-reason";
+            reason.textContent = `🎬 ${result.groupReason}`;
+            watchpartyResult.appendChild(reason);
+        }
+
+        const grid = document.createElement("div");
+        grid.className = "watchparty-grid";
+        (result.movies || []).forEach((m) => {
+            if (!m.movieId) return;
+            const card = document.createElement("div");
+            card.className = "browse-card";
+            const posterPath = m.poster_path ? `${TMDB_IMG_URL}${m.poster_path}` : PLACEHOLDER_POSTER;
+            card.innerHTML = `
+                <img src="${posterPath}" alt="${m.title || ""}" loading="lazy" onerror="this.onerror=null;this.src='${PLACEHOLDER_POSTER}';">
+                <div class="browse-card-info">
+                    <div class="browse-card-title">${m.title || ""}</div>
+                </div>
+            `;
+            card.addEventListener("click", () => {
+                watchpartyModal.classList.add("hidden");
+                loadSharedMovie(m.movieId);
+            });
+            grid.appendChild(card);
+        });
+        watchpartyResult.appendChild(grid);
+    }
+
+    async function computeAndPublishResult(room) {
+        watchpartyResult.textContent = currentLang === "hi"
+            ? "पूरे ग्रुप के लिए फ़िल्में ढूंढ रहे हैं..."
+            : "Finding movies the whole group will like...";
+        try {
+            const answersSummary = Object.values(room.players || {})
+                .map((p) => `${p.name}: ${JSON.stringify(p.answers || {})}`)
+                .join("\n");
+            const langLabel = currentLang === "hi" ? "Hindi" : "English";
+            const prompt = `A group is picking a movie to watch together tonight. Here are each person's quick taste answers:
+${answersSummary}
+
+Suggest 6 well-known real movies that blend the group's tastes well (compromise where they differ, and vary the picks so it's a real shortlist, not 6 near-identical films). Reply with ONLY strict JSON:
+{"groupReason": "one short upbeat sentence (in ${langLabel}) summing up the group's vibe and why these picks fit", "movies": [{"title": "movie title"}, ... exactly 6 entries]}`;
             const parsed = await callGemini(prompt);
-            const results = await searchMovieByTitle(parsed.title);
-            const best = results.find((r) => r.poster_path) || results[0] || null;
-            const result = {
-                title: parsed.title,
-                reason: parsed.reason || "",
-                movieId: best ? best.id : null
-            };
-            renderPartyResult(result);
-            // Publish so the other phone's poll picks it up too.
+            const rawMovies = Array.isArray(parsed.movies) ? parsed.movies.slice(0, 6) : [];
+            const resolved = await Promise.all(
+                rawMovies.map(async (m) => {
+                    const found = await searchMovieByTitle(m.title);
+                    const best = found.find((r) => r.poster_path) || found[0] || null;
+                    return best
+                        ? { title: m.title, movieId: best.id, poster_path: best.poster_path }
+                        : { title: m.title, movieId: null, poster_path: null };
+                })
+            );
+            const result = { groupReason: parsed.groupReason || "", movies: resolved.filter((m) => m.movieId) };
+            if (!result.movies.length) throw new Error("no-matches");
+            renderGridResult(result);
             await patchRoom(roomCode, { result });
         } catch (e) {
             watchpartyResult.textContent = t("chat_error");
         }
     }
 
-    // --- Player A: create a fresh room ---
-    function openParty() {
-        stopPolling();
-        roomCode = genRoomCode();
-        myRole = "a";
-        myAnswers = {};
-        computeAttempted = false;
-        watchpartyRoomCode.textContent = roomCode;
-        watchpartyDesc.textContent = t("watchparty_player_a");
-        watchpartyNextBtn.textContent = t("watchparty_continue_btn");
-        renderQuestions(myAnswers);
-        showSetupScreen();
-        watchpartyModal.classList.remove("hidden");
+    async function pollWaitingOnce() {
+        try {
+            const room = await fetchRoom(roomCode);
+            await reactAfterFinish(room);
+        } catch (e) {}
     }
 
-    // --- Player B: joined via a shared ?party=CODE link ---
-    async function joinParty(code) {
-        stopPolling();
-        roomCode = (code || "").toUpperCase();
-        myRole = "b";
-        myAnswers = {};
-        computeAttempted = false;
-        watchpartyRoomCode.textContent = roomCode;
-        watchpartyDesc.textContent = t("watchparty_player_b");
-        watchpartyNextBtn.textContent = t("watchparty_continue_btn");
-        renderQuestions(myAnswers);
-        showSetupScreen();
-        watchpartyModal.classList.remove("hidden");
+    async function reactAfterFinish(room) {
+        if (!room) return;
+        if (room.result) {
+            renderGridResult(room.result);
+            return;
+        }
+        const players = Object.values(room.players || {});
+        const allDone = players.length > 0 && players.every((p) => p.done);
+        if (!allDone) {
+            renderWaitingScreen(room);
+            return;
+        }
+        // Everyone's answered. The host computes immediately; guests give the
+        // host a few seconds before stepping in themselves, in case the
+        // host's tab/phone dropped, so the room never gets permanently stuck.
+        if (isHost && !hostComputeAttempted) {
+            hostComputeAttempted = true;
+            stopPolling();
+            await computeAndPublishResult(room);
+            return;
+        }
+        renderWaitingScreen(room);
+        if (!isHost && !fallbackComputeTimer) {
+            fallbackComputeTimer = setTimeout(async () => {
+                try {
+                    const latest = await fetchRoom(roomCode);
+                    if (latest && !latest.result && !hostComputeAttempted) {
+                        hostComputeAttempted = true;
+                        stopPolling();
+                        await computeAndPublishResult(latest);
+                    }
+                } catch (e) {}
+            }, 6000);
+        }
     }
-    // Exposed so init() can call this if the page loaded with ?party=CODE.
-    window.__joinWatchParty = joinParty;
 
-    watchpartyNextBtn.addEventListener("click", async () => {
+    async function finishQuestions() {
         watchpartyNextBtn.disabled = true;
         try {
-            const patch = myRole === "a" ? { answersA: myAnswers } : { answersB: myAnswers };
-            const room = await patchRoom(roomCode, patch);
-            await reactToRoomState(room);
+            await patchRoom(roomCode, {
+                players: { [myPlayerId]: { name: myName, joinedAt: Date.now(), done: true, answers: myAnswers } }
+            });
+            const room = await fetchRoom(roomCode);
+            hostComputeAttempted = false;
+            await reactAfterFinish(room);
+            pollTimer = setInterval(pollWaitingOnce, 3000);
         } catch (e) {
-            showWaitingScreen(t("chat_error"));
+            showToast(t("chat_error"));
         } finally {
             watchpartyNextBtn.disabled = false;
         }
-    });
+    }
 
-    chipWatchparty.addEventListener("click", openParty);
+    // -------- Wiring --------
+    function resetModalForOpen() {
+        stopPolling();
+        myPlayerId = getOrCreatePlayerId();
+        watchpartyNameInput.value = resolveMyName();
+        watchpartyRoomRow.classList.add("hidden");
+        watchpartyEntryBlock.classList.remove("hidden");
+        watchpartyStartBtn.classList.add("hidden");
+        watchpartyHostHint.classList.add("hidden");
+        watchpartyPlayersCol.classList.add("hidden");
+        watchpartyCodeInput.value = "";
+        watchpartyDesc.textContent = currentLang === "hi"
+            ? "अपना नाम लिखें, फिर रूम बनाएं या कोड डालकर जुड़ें — सबको AI के कुछ सवाल दिखेंगे और हम पूरे ग्रुप के लिए फिल्में ढूंढ देंगे।"
+            : "Enter your name, then create a room or join one with a code — everyone answers a few AI-picked questions and we'll find movies the whole group will like.";
+        showLobbyScreen();
+        watchpartyModal.classList.remove("hidden");
+    }
+
+    chipWatchparty.addEventListener("click", resetModalForOpen);
+    watchpartyCreateBtn.addEventListener("click", createRoom);
+    watchpartyJoinBtn.addEventListener("click", () => joinRoom(watchpartyCodeInput.value));
+    watchpartyCodeInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") joinRoom(watchpartyCodeInput.value);
+    });
+    watchpartyStartBtn.addEventListener("click", startParty);
+    watchpartyNextBtn.addEventListener("click", finishQuestions);
+
     if (watchpartyModalClose) {
         watchpartyModalClose.addEventListener("click", () => {
             watchpartyModal.classList.add("hidden");
@@ -4619,6 +4960,22 @@ Suggest ONE well-known real movie both would likely enjoy, blending their tastes
             }
         });
     }
+
+    // Exposed so init() can call this if the page loaded with ?party=CODE.
+    window.__joinWatchParty = function (code) {
+        myPlayerId = getOrCreatePlayerId();
+        watchpartyModal.classList.remove("hidden");
+        watchpartyNameInput.value = resolveMyName();
+        watchpartyCodeInput.value = (code || "").toUpperCase();
+        watchpartyEntryBlock.classList.remove("hidden");
+        watchpartyRoomRow.classList.add("hidden");
+        showLobbyScreen();
+        if (watchpartyNameInput.value.trim()) {
+            joinRoom(code);
+        } else {
+            watchpartyNameInput.focus();
+        }
+    };
 })();
 
 // -----------------------------------------------------------
