@@ -65,22 +65,22 @@ const AI_FETCH_TIMEOUT_MS = 20000;
 //    Without a real Client ID, sign-in will show a friendly error instead
 //    of crashing the rest of the app.
 const GOOGLE_CLIENT_ID = "841276363055-ju5n6mugao7mjcosakr5efjocsird0gq.apps.googleusercontent.com";
-const GOOGLE_OAUTH_SCOPE = "openid email profile https://www.googleapis.com/auth/drive.appdata";
+const GOOGLE_OAUTH_SCOPE = "openid email profile";
 const GOOGLE_STATE_KEY = "popcornnight_oauth_state";
 const USER_SESSION_KEY = "popcornnight_user";
-const GOOGLE_TOKEN_KEY = "popcornnight_gtoken";
 let currentUser = null; // { sub, name, email, picture }
-let googleAccessToken = null; // { token, expiresAt } — kept in-memory + sessionStorage this tab
 
 // -----------------------------------------------------------
 // 1d. WISHLIST CONFIG
 // -----------------------------------------------------------
 // Wishlist data is namespaced per Google account (by "sub") and mirrored in
-// this browser's localStorage for instant offline reads, AND synced to the
-// user's own Google Drive "appDataFolder" (a hidden, app-private space in
-// their Drive) whenever we hold a valid access token — so signing in with
-// the same Google account on a different device pulls the same wishlist
-// down automatically. See syncWishlistFromCloud() / pushWishlistToCloud().
+// this browser's localStorage for instant offline reads, AND synced to our
+// own Cloudflare Worker (backed by a Workers KV store, keyed by the user's
+// Google "sub") — so signing in with the same Google account on a
+// different device pulls the same wishlist down automatically. No Drive
+// scope, no 1-hour token expiry to worry about. See syncWishlistFromCloud()
+// / pushWishlistToCloud().
+const WISHLIST_API = `${TMDB_BASE_URL.replace("/3", "")}/wishlist`;
 function wishlistStorageKey() {
     return currentUser ? `popcornnight_wishlist_${currentUser.sub}` : null;
 }
@@ -1663,14 +1663,9 @@ async function openBrowseScreen(mode, regionCode, regionLabel, searchQuery) {
         // Show whatever's local instantly, then pull anything added from
         // another signed-in device (e.g. desktop) since we last synced —
         // syncWishlistFromCloud() re-renders this grid itself if the merge
-        // brings in anything new. If there's no valid token right now
-        // (common after the ~1hr Google token expires), nudge the user to
-        // reconnect instead of silently staying stale.
-        if (getValidAccessToken()) {
-            syncWishlistFromCloud();
-        } else {
-            showMovieHomeToast(t("wishlist_reconnect_hint"));
-        }
+        // brings in anything new. This only needs currentUser.sub, not a
+        // Google access token, so it works even long after sign-in.
+        syncWishlistFromCloud();
         return;
     }
 
@@ -3520,12 +3515,11 @@ async function handleGoogleAuthRedirect() {
         try {
             localStorage.setItem(USER_SESSION_KEY, JSON.stringify(currentUser));
         } catch (e) {}
-        storeGoogleAccessToken(accessToken, expiresIn);
         renderAccountUI();
         updateWishlistCountBadge();
-        // Fresh sign-in on THIS device/browser = the moment we have a valid
-        // Drive token, so pull down anything saved from other devices and
-        // reconcile with whatever's local here.
+        // Fresh sign-in on THIS device/browser — pull down anything saved
+        // from other devices (keyed by this account's "sub" in our own
+        // Worker KV) and reconcile with whatever's local here.
         syncWishlistFromCloud();
         return true;
     } catch (e) {
@@ -3543,106 +3537,44 @@ function restoreSavedGoogleSession() {
             updateWishlistCountBadge();
         }
     } catch (e) {}
-    restoreGoogleAccessToken();
-    // If this tab still holds a non-expired token from earlier (e.g. a
-    // page refresh rather than a brand-new sign-in), keep syncing with it.
-    if (currentUser && getValidAccessToken()) syncWishlistFromCloud();
+    // Sync on every load (refresh, revisit, etc.) — no token to check now.
+    if (currentUser) syncWishlistFromCloud();
 }
 
-// --- Google access token: kept in-memory + mirrored to localStorage so it
-//     survives the token's full ~1hr lifetime even if the tab/app is closed
-//     and reopened (very common on mobile) — previously this used
-//     sessionStorage, which wiped the token the moment a tab closed, well
-//     before it actually expired, silently breaking cross-device sync. ---
-function storeGoogleAccessToken(token, expiresInSeconds) {
-    googleAccessToken = { token, expiresAt: Date.now() + expiresInSeconds * 1000 - 60000 };
-    try {
-        localStorage.setItem(GOOGLE_TOKEN_KEY, JSON.stringify(googleAccessToken));
-    } catch (e) {}
-}
-
-function restoreGoogleAccessToken() {
-    try {
-        const saved = localStorage.getItem(GOOGLE_TOKEN_KEY);
-        if (saved) googleAccessToken = JSON.parse(saved);
-    } catch (e) {}
-}
-
-function getValidAccessToken() {
-    if (!googleAccessToken || !googleAccessToken.token) return null;
-    if (Date.now() >= googleAccessToken.expiresAt) return null;
-    return googleAccessToken.token;
-}
-
-// --- Google Drive appDataFolder wishlist sync (no custom backend needed —
-//     appDataFolder is a private, hidden space in the signed-in user's own
-//     Drive that only this app can see) ---
-const DRIVE_WISHLIST_FILENAME = "popcornnight_wishlist.json";
-const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
-const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3/files";
-
-async function driveFindWishlistFile(token) {
-    const url = `${DRIVE_API}?spaces=appDataFolder&q=${encodeURIComponent(
-        `name='${DRIVE_WISHLIST_FILENAME}'`
-    )}&fields=files(id,name)`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) throw new Error("drive-list-failed");
-    const data = await res.json();
-    return (data.files && data.files[0] && data.files[0].id) || null;
-}
-
-async function driveDownloadWishlist(token, fileId) {
-    const res = await fetch(`${DRIVE_API}/${fileId}?alt=media`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
-    if (!res.ok) throw new Error("drive-download-failed");
-    try {
-        return await res.json();
-    } catch (e) {
-        return [];
-    }
-}
-
-async function driveUploadWishlist(token, fileId, list) {
-    const body = JSON.stringify(list);
-    if (fileId) {
-        const res = await fetch(`${DRIVE_UPLOAD_API}/${fileId}?uploadType=media`, {
-            method: "PATCH",
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body
-        });
-        if (!res.ok) throw new Error("drive-update-failed");
-        return fileId;
-    }
-    const metadata = { name: DRIVE_WISHLIST_FILENAME, parents: ["appDataFolder"] };
-    const boundary = "popcornnight_boundary_" + Math.random().toString(36).slice(2);
-    const multipartBody =
-        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
-        `--${boundary}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${boundary}--`;
-    const res = await fetch(`${DRIVE_UPLOAD_API}?uploadType=multipart`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": `multipart/related; boundary=${boundary}` },
-        body: multipartBody
-    });
-    if (!res.ok) throw new Error("drive-create-failed");
-    const created = await res.json();
-    return created.id;
-}
-
-let driveWishlistFileId = null;
+// --- Wishlist sync via our own Cloudflare Worker (Workers KV, keyed by the
+//     signed-in user's Google "sub") — replaces the old Drive appDataFolder
+//     approach. No Drive scope, no Drive API quirks, and no more "sync
+//     breaks after the ~1hr Google token expires": the Worker call below
+//     only needs currentUser.sub, which we already keep in localStorage
+//     for as long as the user stays signed in. ---
 let cloudSyncInFlight = false;
+
+async function fetchWishlistFromServer(sub) {
+    const res = await fetch(`${WISHLIST_API}/${encodeURIComponent(sub)}`);
+    if (res.status === 404) return [];
+    if (!res.ok) throw new Error("wishlist-fetch-failed");
+    const data = await res.json();
+    return Array.isArray(data) ? data : Array.isArray(data.wishlist) ? data.wishlist : [];
+}
+
+async function pushWishlistToServer(sub, list) {
+    const res = await fetch(`${WISHLIST_API}/${encodeURIComponent(sub)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wishlist: list })
+    });
+    if (!res.ok) throw new Error("wishlist-push-failed");
+}
 
 // Pulls the cloud copy (if any), merges it with whatever's local on this
 // device (union by movie id — nothing is silently dropped from either
 // side), saves the merged result locally, then pushes that merge back up
 // so both copies agree.
 async function syncWishlistFromCloud() {
-    const token = getValidAccessToken();
-    if (!token || !currentUser || cloudSyncInFlight) return;
+    if (!currentUser || cloudSyncInFlight) return;
     cloudSyncInFlight = true;
     try {
-        driveWishlistFileId = await driveFindWishlistFile(token);
-        const cloudList = driveWishlistFileId ? await driveDownloadWishlist(token, driveWishlistFileId) : [];
+        const cloudList = await fetchWishlistFromServer(currentUser.sub);
         const localList = getWishlist();
 
         const merged = [...localList];
@@ -3659,10 +3591,10 @@ async function syncWishlistFromCloud() {
         if (browseScreen && !browseScreen.classList.contains("hidden") && lastBrowseMode === "wishlist") {
             renderBrowseGrid(merged, "wishlist");
         }
-        driveWishlistFileId = await driveUploadWishlist(token, driveWishlistFileId, merged);
+        await pushWishlistToServer(currentUser.sub, merged);
     } catch (e) {
-        // Offline, token expired mid-flight, or Drive hiccup — the local
-        // wishlist still works fine, we just skip syncing this time.
+        // Offline or Worker hiccup — the local wishlist still works fine,
+        // we just skip syncing this time.
     } finally {
         cloudSyncInFlight = false;
     }
@@ -3670,11 +3602,9 @@ async function syncWishlistFromCloud() {
 
 // Fire-and-forget push, called after every local wishlist change.
 async function pushWishlistToCloud(list) {
-    const token = getValidAccessToken();
-    if (!token || !currentUser) return;
+    if (!currentUser) return;
     try {
-        if (!driveWishlistFileId) driveWishlistFileId = await driveFindWishlistFile(token);
-        driveWishlistFileId = await driveUploadWishlist(token, driveWishlistFileId, list);
+        await pushWishlistToServer(currentUser.sub, list);
     } catch (e) {
         // Will simply retry on the next change, or reconcile at next sign-in.
     }
@@ -3682,15 +3612,14 @@ async function pushWishlistToCloud(list) {
 
 // Re-sync whenever this tab/app becomes visible again (app switch, unlock,
 // tab refocus) — not just right after sign-in — so items added on another
-// signed-in device (e.g. desktop) show up here without a manual re-login,
-// as long as this device's Google token hasn't expired yet.
+// signed-in device (e.g. desktop) show up here without a manual re-login.
 document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && currentUser && getValidAccessToken()) {
+    if (document.visibilityState === "visible" && currentUser) {
         syncWishlistFromCloud();
     }
 });
 window.addEventListener("focus", () => {
-    if (currentUser && getValidAccessToken()) syncWishlistFromCloud();
+    if (currentUser) syncWishlistFromCloud();
 });
 
 function signOutUser() {

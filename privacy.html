@@ -73,7 +73,7 @@
     <h2>1. What we collect</h2>
     <ul>
       <li><strong>Google Sign-In (optional):</strong> if you choose to sign in with Google, we receive your basic profile information — name, email address, and profile picture — from your Google account.</li>
-      <li><strong>Wishlist data:</strong> movies you save to your Wishlist are stored in a private, app-specific folder inside your own Google Drive (Google's "appDataFolder"). This folder is not visible in your regular Drive, and no other app — including us, outside of syncing your wishlist — can read it.</li>
+      <li><strong>Wishlist data:</strong> movies you save to your Wishlist are stored on our own server infrastructure (a Cloudflare Worker with Workers KV storage), keyed to your Google account ID. This lets your wishlist sync across your devices when you're signed in with the same account.</li>
       <li><strong>Local device storage:</strong> preferences like language, theme, and recently viewed movies are stored locally in your browser (localStorage), and are not sent to any server.</li>
       <li><strong>No passwords:</strong> we never see or store your Google password. Sign-in is handled entirely by Google.</li>
     </ul>
@@ -81,22 +81,22 @@
     <h2>2. What we don't do</h2>
     <ul>
       <li>We do not sell, rent, or share your personal data with advertisers or third parties.</li>
-      <li>We do not access any part of your Google Drive outside the app's own private data folder.</li>
-      <li>We do not read your Gmail, Google Contacts, Calendar, or any other Google service.</li>
+      <li>We do not access your Google Drive, Gmail, Google Contacts, Calendar, or any other Google service — sign-in only shares basic profile info (name, email, profile picture).</li>
     </ul>
 
     <h2>3. Third-party services we use</h2>
     <ul>
       <li><strong>TMDB (The Movie Database):</strong> movie titles, posters, and descriptions are fetched from TMDB's public API. No personal data is sent to TMDB.</li>
       <li><strong>Google Gemini API:</strong> used to power the AI-driven mood quiz. Only your quiz answers (e.g. mood, genre preference) are sent — never your name, email, or account details.</li>
-      <li><strong>Google Sign-In / Google Drive API:</strong> used only for optional sign-in and wishlist sync, as described above.</li>
+      <li><strong>Google Sign-In:</strong> used only for optional sign-in, as described above.</li>
+      <li><strong>Cloudflare Workers / Workers KV:</strong> our own backend, used to store and sync your Wishlist data across your devices.</li>
     </ul>
 
     <h2>4. Data deletion</h2>
     <p>
       You can disconnect the app from your Google account at any time via
       <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google Account → Security → Third-party access</a>.
-      Removing access also deletes the app's private data folder in your Drive.
+      To request deletion of your stored Wishlist data from our servers, email us at the address below.
       Clearing your browser's site data removes everything stored locally on your device.
     </p>
 
