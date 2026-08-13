@@ -468,12 +468,15 @@ const TRANSLATIONS = {
         compare_desc: "Currently viewing:",
         compare_placeholder: "What should I compare it with? e.g. Interstellar",
         compare_btn: "Compare 🎬",
-        watchparty_desc: "Answer a few quick taste questions each, and we'll merge both picks into one recommendation. Perfect for movie night with a friend — pass the device back and forth.",
+        watchparty_desc: "Answer a few quick taste questions, share the room link with a friend, and we'll merge both picks into one recommendation — works from two separate phones.",
         watchparty_room_label: "Room Code",
         watchparty_copy_btn: "Copy Link",
         watchparty_continue_btn: "Continue →",
-        watchparty_player_a: "Player 1's turn",
-        watchparty_player_b: "Player 2's turn",
+        watchparty_player_a: "Your turn — answer a few quick questions",
+        watchparty_player_b: "You've joined the room! Answer a few quick questions",
+        watchparty_waiting: "Waiting for your friend to answer on their phone... this updates automatically, keep this open.",
+        watchparty_share_hint: "Share this room code or link with your friend so they can join from their own phone.",
+        watchparty_room_not_found: "This watch party room wasn't found or has expired. Ask your friend to start a new one.",
         watchparty_finding: "Finding a movie you'll both like...",
         ticket_affiliate_btn: "🎟️ Book Tickets",
         notif_enabled_toast: "Notifications on 🔔",
@@ -631,12 +634,15 @@ const TRANSLATIONS = {
         compare_desc: "अभी देख रहे हैं:",
         compare_placeholder: "किससे तुलना करें? जैसे Interstellar",
         compare_btn: "तुलना करें 🎬",
-        watchparty_desc: "दोनों कुछ सवालों के जवाब दें, हम दोनों की पसंद मिलाकर एक फिल्म सुझाएंगे।",
+        watchparty_desc: "कुछ सवालों के जवाब दें, रूम लिंक अपने दोस्त को भेजें, और हम दोनों की पसंद मिलाकर एक फिल्म सुझाएंगे — दो अलग-अलग फोन से चलता है।",
         watchparty_room_label: "रूम कोड",
         watchparty_copy_btn: "लिंक कॉपी करें",
         watchparty_continue_btn: "आगे बढ़ें →",
-        watchparty_player_a: "खिलाड़ी 1 की बारी",
-        watchparty_player_b: "खिलाड़ी 2 की बारी",
+        watchparty_player_a: "आपकी बारी — कुछ सवालों के जवाब दें",
+        watchparty_player_b: "आप रूम में शामिल हो गए! कुछ सवालों के जवाब दें",
+        watchparty_waiting: "आपके दोस्त के जवाब का इंतज़ार हो रहा है... ये अपने आप अपडेट होगा, इसे खुला रखें।",
+        watchparty_share_hint: "ये रूम कोड या लिंक अपने दोस्त को भेजें ताकि वो अपने फोन से जुड़ सके।",
+        watchparty_room_not_found: "ये वॉच पार्टी रूम नहीं मिला या एक्सपायर हो गया। दोस्त से नया रूम शुरू करने को कहें।",
         watchparty_finding: "आप दोनों के लिए फिल्म ढूंढ रहे हैं...",
         ticket_affiliate_btn: "🎟️ टिकट बुक करें",
         notif_enabled_toast: "नोटिफिकेशन चालू 🔔",
@@ -1022,6 +1028,7 @@ const watchpartyModal = document.getElementById("watchparty-modal");
 const watchpartyModalBackdrop = document.getElementById("watchparty-modal-backdrop");
 const watchpartyModalClose = document.getElementById("watchparty-modal-close");
 const watchpartySetup = document.getElementById("watchparty-setup");
+const watchpartyDesc = document.getElementById("watchparty-desc");
 const watchpartyRoomCode = document.getElementById("watchparty-room-code");
 const watchpartyCopyBtn = document.getElementById("watchparty-copy-btn");
 const watchpartyQuestions = document.getElementById("watchparty-questions");
@@ -4362,7 +4369,15 @@ async function searchMovieByTitle(title) {
     }
 }
 
-// --- Watch Party Mode (same-device, two-player taste merge) ---
+// --- Watch Party Mode (real cross-device room, via our Worker + KV) ---
+// Room state lives server-side under /party/<code>: { answersA, answersB,
+// result, updatedAt }. Whoever creates the room is "Player A"; whoever
+// opens the shared ?party=CODE link is "Player B". Once both sets of
+// answers are in, whichever side notices first (its own submit, or the
+// other side's poll) asks Gemini for a merged pick and publishes the
+// result back to the room so both phones show the same answer.
+const PARTY_API = `${TMDB_BASE_URL.replace("/3", "")}/party`;
+
 (function setupWatchParty() {
     if (!chipWatchparty) return;
     const PARTY_QUESTIONS = [
@@ -4370,13 +4385,38 @@ async function searchMovieByTitle(title) {
         { key: "mood", title: "Tonight's mood", options: ["Laugh 😂", "Cry 😭", "Thrill 😱", "Chill 😌"] },
         { key: "era", title: "Any era preference?", options: ["Latest", "2010s", "2000s", "Classics", "No preference"] }
     ];
-    let currentPlayer = 1;
-    let answersA = {};
-    let answersB = {};
+    let myRole = "a"; // "a" = room creator, "b" = joined via shared link
+    let myAnswers = {};
     let roomCode = "";
+    let pollTimer = null;
+    let computeAttempted = false;
 
     function genRoomCode() {
         return Math.random().toString(36).slice(2, 8).toUpperCase();
+    }
+
+    async function fetchRoom(code) {
+        const res = await fetch(`${PARTY_API}/${encodeURIComponent(code)}`);
+        if (res.status === 404) return null;
+        if (!res.ok) throw new Error("party-fetch-failed");
+        return await res.json();
+    }
+
+    // Server merges this patch into whatever's already stored for the
+    // room (creating it if it doesn't exist yet) and returns the result.
+    async function patchRoom(code, patch) {
+        const res = await fetch(`${PARTY_API}/${encodeURIComponent(code)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(patch)
+        });
+        if (!res.ok) throw new Error("party-patch-failed");
+        return await res.json();
+    }
+
+    function stopPolling() {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = null;
     }
 
     function renderQuestions(answersRef) {
@@ -4408,22 +4448,85 @@ async function searchMovieByTitle(title) {
         });
     }
 
-    function openParty() {
-        roomCode = genRoomCode();
-        watchpartyRoomCode.textContent = roomCode;
-        currentPlayer = 1;
-        answersA = {};
-        answersB = {};
+    function showSetupScreen() {
         watchpartySetup.classList.remove("hidden");
         watchpartyResult.classList.add("hidden");
-        watchpartyNextBtn.textContent = t("watchparty_continue_btn");
-        renderQuestions(answersA);
-        watchpartyModal.classList.remove("hidden");
+        watchpartyResult.innerHTML = "";
     }
 
-    async function finishParty() {
+    function showWaitingScreen(message) {
+        stopPolling();
         watchpartySetup.classList.add("hidden");
         watchpartyResult.classList.remove("hidden");
+        watchpartyResult.innerHTML = "";
+        const p = document.createElement("p");
+        p.textContent = message;
+        watchpartyResult.appendChild(p);
+        if (roomCode) {
+            const codeRow = document.createElement("p");
+            codeRow.className = "watchparty-room-code";
+            codeRow.textContent = roomCode;
+            watchpartyResult.appendChild(codeRow);
+        }
+        pollTimer = setInterval(pollRoomOnce, 3000);
+    }
+
+    function renderPartyResult(result) {
+        stopPolling();
+        watchpartySetup.classList.add("hidden");
+        watchpartyResult.classList.remove("hidden");
+        watchpartyResult.innerHTML = "";
+        const p = document.createElement("p");
+        p.textContent = `🎬 ${result.title} — ${result.reason || ""}`;
+        watchpartyResult.appendChild(p);
+        if (result.movieId) {
+            const btn = document.createElement("button");
+            btn.className = "btn ticket-btn watchparty-next-btn";
+            btn.textContent = "🍿 Watch This";
+            btn.addEventListener("click", () => {
+                watchpartyModal.classList.add("hidden");
+                loadSharedMovie(result.movieId);
+            });
+            watchpartyResult.appendChild(btn);
+        }
+    }
+
+    // Called after my own submit, and on every poll tick, to decide what
+    // this screen should show right now based on the room's current state.
+    async function reactToRoomState(room) {
+        if (!room) {
+            showWaitingScreen(t("watchparty_room_not_found"));
+            stopPolling();
+            return;
+        }
+        if (room.result) {
+            renderPartyResult(room.result);
+            return;
+        }
+        if (room.answersA && room.answersB) {
+            if (!computeAttempted) {
+                computeAttempted = true;
+                await computeAndPublishResult(room.answersA, room.answersB);
+            }
+            return;
+        }
+        // Still missing one side's answers — keep waiting/polling.
+        showWaitingScreen(t("watchparty_waiting"));
+    }
+
+    async function pollRoomOnce() {
+        try {
+            const room = await fetchRoom(roomCode);
+            await reactToRoomState(room);
+        } catch (e) {
+            // Offline or Worker hiccup — just try again on the next tick.
+        }
+    }
+
+    async function computeAndPublishResult(answersA, answersB) {
+        watchpartySetup.classList.add("hidden");
+        watchpartyResult.classList.remove("hidden");
+        watchpartyResult.innerHTML = "";
         watchpartyResult.textContent = t("watchparty_finding");
         try {
             const prompt = `Two friends are picking a movie together tonight. Their quick taste answers:
@@ -4433,38 +4536,78 @@ Player 2: ${JSON.stringify(answersB)}
 Suggest ONE well-known real movie both would likely enjoy, blending their tastes (compromise where they differ). Reply with ONLY a JSON object: {"title": "movie title", "reason": "one short sentence explaining the pick, in ${currentLang === "hi" ? "Hindi" : "English"}"}`;
             const parsed = await callGemini(prompt);
             const results = await searchMovieByTitle(parsed.title);
-            watchpartyResult.innerHTML = "";
-            const p = document.createElement("p");
-            p.textContent = `🎬 ${parsed.title} — ${parsed.reason || ""}`;
-            watchpartyResult.appendChild(p);
-            if (results && results.length) {
-                const btn = document.createElement("button");
-                btn.className = "btn ticket-btn watchparty-next-btn";
-                btn.textContent = "🍿 Watch This";
-                btn.addEventListener("click", () => {
-                    watchpartyModal.classList.add("hidden");
-                    const best = results.find((r) => r.poster_path) || results[0];
-                    loadSharedMovie(best.id);
-                });
-                watchpartyResult.appendChild(btn);
-            }
+            const best = results.find((r) => r.poster_path) || results[0] || null;
+            const result = {
+                title: parsed.title,
+                reason: parsed.reason || "",
+                movieId: best ? best.id : null
+            };
+            renderPartyResult(result);
+            // Publish so the other phone's poll picks it up too.
+            await patchRoom(roomCode, { result });
         } catch (e) {
             watchpartyResult.textContent = t("chat_error");
         }
     }
 
-    watchpartyNextBtn.addEventListener("click", () => {
-        if (currentPlayer === 1) {
-            currentPlayer = 2;
-            renderQuestions(answersB);
-        } else {
-            finishParty();
+    // --- Player A: create a fresh room ---
+    function openParty() {
+        stopPolling();
+        roomCode = genRoomCode();
+        myRole = "a";
+        myAnswers = {};
+        computeAttempted = false;
+        watchpartyRoomCode.textContent = roomCode;
+        watchpartyDesc.textContent = t("watchparty_player_a");
+        watchpartyNextBtn.textContent = t("watchparty_continue_btn");
+        renderQuestions(myAnswers);
+        showSetupScreen();
+        watchpartyModal.classList.remove("hidden");
+    }
+
+    // --- Player B: joined via a shared ?party=CODE link ---
+    async function joinParty(code) {
+        stopPolling();
+        roomCode = (code || "").toUpperCase();
+        myRole = "b";
+        myAnswers = {};
+        computeAttempted = false;
+        watchpartyRoomCode.textContent = roomCode;
+        watchpartyDesc.textContent = t("watchparty_player_b");
+        watchpartyNextBtn.textContent = t("watchparty_continue_btn");
+        renderQuestions(myAnswers);
+        showSetupScreen();
+        watchpartyModal.classList.remove("hidden");
+    }
+    // Exposed so init() can call this if the page loaded with ?party=CODE.
+    window.__joinWatchParty = joinParty;
+
+    watchpartyNextBtn.addEventListener("click", async () => {
+        watchpartyNextBtn.disabled = true;
+        try {
+            const patch = myRole === "a" ? { answersA: myAnswers } : { answersB: myAnswers };
+            const room = await patchRoom(roomCode, patch);
+            await reactToRoomState(room);
+        } catch (e) {
+            showWaitingScreen(t("chat_error"));
+        } finally {
+            watchpartyNextBtn.disabled = false;
         }
     });
 
     chipWatchparty.addEventListener("click", openParty);
-    if (watchpartyModalClose) watchpartyModalClose.addEventListener("click", () => watchpartyModal.classList.add("hidden"));
-    if (watchpartyModalBackdrop) watchpartyModalBackdrop.addEventListener("click", () => watchpartyModal.classList.add("hidden"));
+    if (watchpartyModalClose) {
+        watchpartyModalClose.addEventListener("click", () => {
+            watchpartyModal.classList.add("hidden");
+            stopPolling();
+        });
+    }
+    if (watchpartyModalBackdrop) {
+        watchpartyModalBackdrop.addEventListener("click", () => {
+            watchpartyModal.classList.add("hidden");
+            stopPolling();
+        });
+    }
     if (watchpartyCopyBtn) {
         watchpartyCopyBtn.addEventListener("click", async () => {
             const url = `${window.location.origin}${window.location.pathname}?party=${roomCode}`;
@@ -4841,6 +4984,7 @@ if (brandHomeBtn) brandHomeBtn.addEventListener("click", goToHomeScreen);
     const params = new URLSearchParams(window.location.search);
     const sharedMovieId = params.get("movie");
     const sharedLang = params.get("lang");
+    const sharedPartyCode = params.get("party");
 
     let storedLang = null;
     try {
@@ -4858,6 +5002,10 @@ if (brandHomeBtn) brandHomeBtn.addEventListener("click", goToHomeScreen);
 
     if (sharedMovieId) {
         loadSharedMovie(sharedMovieId);
+    }
+
+    if (sharedPartyCode && typeof window.__joinWatchParty === "function") {
+        window.__joinWatchParty(sharedPartyCode);
     }
 
     loadFilmReel();
