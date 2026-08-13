@@ -874,12 +874,58 @@ const clapperboardText = document.getElementById("clapperboard-text");
 const movieResult = document.getElementById("movie-result");
 const moviePoster = document.getElementById("movie-poster");
 const moviePosterWrap = document.querySelector(".poster-wrap");
-if (moviePoster && moviePosterWrap) {
-    moviePoster.addEventListener("load", () => moviePosterWrap.classList.remove("is-loading-poster"));
-    moviePoster.addEventListener("error", () => {
-        moviePosterWrap.classList.remove("is-loading-poster");
-        if (moviePoster.src !== PLACEHOLDER_POSTER) moviePoster.src = PLACEHOLDER_POSTER;
-    });
+
+// Robust poster loader for the main swipeable poster: retries once on
+// failure (mobile networks often drop the first request), and — because a
+// stalled mobile connection can leave an <img> hanging with neither a
+// "load" nor an "error" event ever firing — also gives up and falls back
+// to the placeholder after a short timeout instead of showing a poster
+// that never appears.
+let posterLoadGeneration = 0;
+function setPosterSrcSafely(imgEl, wrapEl, url) {
+    if (!imgEl) return;
+    const myGen = ++posterLoadGeneration;
+    let settled = false;
+    let retried = false;
+    let watchdog = null;
+
+    const cleanup = () => {
+        clearTimeout(watchdog);
+        imgEl.removeEventListener("load", onLoad);
+        imgEl.removeEventListener("error", onError);
+    };
+    const onLoad = () => {
+        if (myGen !== posterLoadGeneration || settled) return;
+        settled = true;
+        cleanup();
+        if (wrapEl) wrapEl.classList.remove("is-loading-poster");
+    };
+    const onError = () => {
+        if (myGen !== posterLoadGeneration || settled) return;
+        if (!retried && url !== PLACEHOLDER_POSTER) {
+            retried = true;
+            // One retry with a cache-busting param — often enough to
+            // recover from a dropped first request on flaky mobile data.
+            imgEl.src = url + (url.includes("?") ? "&" : "?") + "retry=" + Date.now();
+            return;
+        }
+        settled = true;
+        cleanup();
+        if (wrapEl) wrapEl.classList.remove("is-loading-poster");
+        if (imgEl.src !== PLACEHOLDER_POSTER) imgEl.src = PLACEHOLDER_POSTER;
+    };
+
+    imgEl.addEventListener("load", onLoad);
+    imgEl.addEventListener("error", onError);
+    watchdog = setTimeout(() => {
+        if (myGen !== posterLoadGeneration || settled) return;
+        settled = true;
+        cleanup();
+        if (wrapEl) wrapEl.classList.remove("is-loading-poster");
+        if (imgEl.src !== PLACEHOLDER_POSTER) imgEl.src = PLACEHOLDER_POSTER;
+    }, 9000);
+
+    imgEl.src = url;
 }
 const movieTitle = document.getElementById("movie-title");
 const movieYear = document.getElementById("movie-year");
@@ -2012,14 +2058,19 @@ async function fetchAiRecommendations({ reset }) {
                         m.year ? `&year=${m.year}` : ""
                     }`
                 );
-                let match = (data.results || [])[0];
+                // Prefer a result that actually has a poster — TMDB's #1 result
+                // is sometimes an obscure re-release/duplicate entry with no
+                // artwork, which used to leave the card blank every time.
+                let match = (data.results || []).find((r) => r.poster_path) || (data.results || [])[0];
 
-                if (!match) {
+                if (!match || !match.poster_path) {
                     // Retry without the year filter in case Gemini's year was slightly off.
                     data = await cachedFetchJson(
                         `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${query}&language=${langParam}&include_adult=false`
                     );
-                    match = (data.results || [])[0];
+                    const retryMatch = (data.results || []).find((r) => r.poster_path);
+                    if (retryMatch) match = retryMatch;
+                    else if (!match) match = (data.results || [])[0];
                 }
 
                 if (match) match._aiReason = m.reason || "";
@@ -2389,9 +2440,9 @@ function renderMovie(movie) {
         : "No description available for this one — sometimes the best surprises come unlabeled.";
     movieOverview.textContent = movie._aiReason ? `🎬 ${movie._aiReason}\n\n${baseOverview}` : baseOverview;
     movieRating.textContent = movie.vote_average ? `⭐ ${movie.vote_average.toFixed(1)}` : "⭐ N/A";
-    moviePoster.src = movie.poster_path ? `${TMDB_IMG_URL}${movie.poster_path}` : PLACEHOLDER_POSTER;
-    if (moviePosterWrap) moviePosterWrap.classList.add("is-loading-poster");
     moviePoster.alt = `${movie.title || "Movie"} poster`;
+    if (moviePosterWrap) moviePosterWrap.classList.add("is-loading-poster");
+    setPosterSrcSafely(moviePoster, moviePosterWrap, movie.poster_path ? `${TMDB_IMG_URL}${movie.poster_path}` : PLACEHOLDER_POSTER);
     renderGenres(movie);
 
     // Ken-Burns zoom: strip then re-add the class so the animation restarts
@@ -4352,7 +4403,8 @@ Suggest ONE well-known real movie both would likely enjoy, blending their tastes
                 btn.textContent = "🍿 Watch This";
                 btn.addEventListener("click", () => {
                     watchpartyModal.classList.add("hidden");
-                    loadSharedMovie(results[0].id);
+                    const best = results.find((r) => r.poster_path) || results[0];
+                    loadSharedMovie(best.id);
                 });
                 watchpartyResult.appendChild(btn);
             }
