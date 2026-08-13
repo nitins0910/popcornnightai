@@ -142,6 +142,10 @@
             <p class="eyebrow" id="start-eyebrow">🎬 Now Screening</p>
             <h1 id="start-title">🎬 What's The Move Tonight?</h1>
             <p id="start-subtitle">Bored? Vibing? Emotionally unstable? 😭<br>Answer a few questions and let us cook your perfect movie pick.</p>
+            <p id="app-purpose-blurb">PopcornNight AI is a free movie-recommendation app. Take a short AI-powered
+                mood quiz to get a personalized pick, browse trending and now-playing movies, watch
+                trailers, and save favorites to a Wishlist that syncs across your devices when you
+                sign in with Google.</p>
 
             <div id="film-reel-strip" class="film-reel-strip" aria-hidden="true">
                 <div id="film-reel-track" class="film-reel-track"></div>
@@ -501,21 +505,7 @@
     <script>
         if ("serviceWorker" in navigator) {
             window.addEventListener("load", () => {
-                navigator.serviceWorker
-                    .register("sw.js", { updateViaCache: "none" }) // always fetch sw.js fresh, never from HTTP cache
-                    .catch(() => {});
-            });
-
-            // When a new service worker takes over (i.e. you pushed an
-            // update to GitHub), auto-reload this tab once so the new
-            // code/assets actually get used instead of the old ones
-            // silently staying loaded until a manual refresh.
-            let swUpdateReloaded = false;
-            navigator.serviceWorker.addEventListener("message", (event) => {
-                if (event.data?.type === "SW_UPDATED" && !swUpdateReloaded) {
-                    swUpdateReloaded = true;
-                    window.location.reload();
-                }
+                navigator.serviceWorker.register("sw.js").catch(() => {});
             });
         }
     </script>
