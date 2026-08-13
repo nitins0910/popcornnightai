@@ -501,7 +501,21 @@
     <script>
         if ("serviceWorker" in navigator) {
             window.addEventListener("load", () => {
-                navigator.serviceWorker.register("sw.js").catch(() => {});
+                navigator.serviceWorker
+                    .register("sw.js", { updateViaCache: "none" }) // always fetch sw.js fresh, never from HTTP cache
+                    .catch(() => {});
+            });
+
+            // When a new service worker takes over (i.e. you pushed an
+            // update to GitHub), auto-reload this tab once so the new
+            // code/assets actually get used instead of the old ones
+            // silently staying loaded until a manual refresh.
+            let swUpdateReloaded = false;
+            navigator.serviceWorker.addEventListener("message", (event) => {
+                if (event.data?.type === "SW_UPDATED" && !swUpdateReloaded) {
+                    swUpdateReloaded = true;
+                    window.location.reload();
+                }
             });
         }
     </script>

@@ -25,6 +25,14 @@ self.addEventListener("activate", (event) => {
                     .filter((key) => key !== SHELL_CACHE && key !== IMAGE_CACHE)
                     .map((key) => caches.delete(key))
             )
+        ).then(() =>
+            // Tell every open tab a new version has taken over, so the page
+            // can auto-reload and actually pick up the new code/assets
+            // instead of silently running stale JS until the user manually
+            // refreshes.
+            self.clients.matchAll({ type: "window" }).then((clients) => {
+                clients.forEach((client) => client.postMessage({ type: "SW_UPDATED" }));
+            })
         )
     );
     self.clients.claim();
