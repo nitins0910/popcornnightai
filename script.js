@@ -472,6 +472,11 @@ const TRANSLATIONS = {
         ott_heading: "📺 What do you have?",
         ott_loading: "Loading your streaming services...",
         ott_load_error: "Couldn't load the list right now. Please try again later.",
+        ott_search_placeholder: "Search streaming services...",
+        ott_search_empty: "No matches. Try a different name.",
+        ott_selected_empty: "None selected yet — search above to add some.",
+        ott_save_btn: "Save",
+        ott_saved_toast: "Subscriptions saved ✅",
         you_can_watch_badge: "✅ You can watch this — it's on your {provider}",
         ott_visit_site: "Open {provider}",
         spoiler_toggle_label: "Spoiler-safe",
@@ -644,6 +649,11 @@ const TRANSLATIONS = {
         ott_heading: "📺 आपके पास क्या है?",
         ott_loading: "आपकी स्ट्रीमिंग सर्विसेज़ लोड हो रही हैं...",
         ott_load_error: "अभी लिस्ट लोड नहीं हो पाई। कृपया बाद में फिर कोशिश करें।",
+        ott_search_placeholder: "स्ट्रीमिंग सर्विस खोजें...",
+        ott_search_empty: "कुछ नहीं मिला। अलग नाम आज़माएं।",
+        ott_selected_empty: "अभी तक कुछ नहीं चुना — ऊपर सर्च करके जोड़ें।",
+        ott_save_btn: "सेव करें",
+        ott_saved_toast: "सब्सक्रिप्शन सेव हो गईं ✅",
         you_can_watch_badge: "✅ आप इसे देख सकते हैं — यह आपके {provider} पर उपलब्ध है",
         ott_visit_site: "{provider} खोलें",
         spoiler_toggle_label: "स्पॉइलर-सेफ",
@@ -1016,7 +1026,10 @@ const startSubtitleEl = document.getElementById("start-subtitle");
 const moodInput = document.getElementById("mood-input");
 const moodSubmitBtn = document.getElementById("mood-submit-btn");
 const moodError = document.getElementById("mood-error");
-const ottChipRow = document.getElementById("settings-ott-chip-row");
+const ottSelectedRow = document.getElementById("settings-ott-selected-row");
+const ottSearchInput = document.getElementById("settings-ott-search");
+const ottResultsRow = document.getElementById("settings-ott-results-row");
+const ottSaveBtn = document.getElementById("settings-ott-save-btn");
 const ottSelectHeading = document.getElementById("settings-ott-heading");
 const settingsSubsSection = document.getElementById("settings-subs-section");
 const homeRecentSection = document.getElementById("home-recently-viewed-section");
@@ -1216,6 +1229,8 @@ function applyStaticTranslations() {
     if (settingsModalTitle) settingsModalTitle.textContent = t("settings_title");
     if (settingsLanguageLabel) settingsLanguageLabel.textContent = t("settings_language_label");
     if (ottSelectHeading) ottSelectHeading.textContent = t("ott_heading");
+    if (ottSearchInput) ottSearchInput.placeholder = t("ott_search_placeholder");
+    if (ottSaveBtn) ottSaveBtn.textContent = t("ott_save_btn");
     document.querySelectorAll(".home-chip").forEach((chip) => {
         const mode = chip.dataset.mode;
         if (!mode) return;
@@ -4396,8 +4411,102 @@ function setSelectedOtt(ids) {
     pushOttSubsToCloud(ids);
 }
 
-// Renders the "My Subscriptions" checklist inside Settings. The section
-// itself is only ever shown for a signed-in user — called from
+// What the user has picked in this Settings session but not yet hit Save
+// on — kept separate from the actually-saved list (getSelectedOtt()) so
+// Save can be one deliberate action instead of firing a cloud sync on
+// every single tap.
+let ottPendingSelection = new Set();
+
+function buildOttChip(p, opts) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "ott-chip" + (opts.selected ? " selected" : "");
+    if (p.logo_path) {
+        const img = document.createElement("img");
+        img.src = `${TMDB_LOGO_URL}${p.logo_path}`;
+        img.alt = "";
+        img.loading = "lazy";
+        chip.appendChild(img);
+    }
+    const label = document.createElement("span");
+    label.textContent = p.name;
+    chip.appendChild(label);
+    if (opts.removable) {
+        const x = document.createElement("span");
+        x.className = "ott-chip-remove";
+        x.textContent = "✕";
+        chip.appendChild(x);
+    }
+    chip.addEventListener("click", opts.onClick);
+    return chip;
+}
+
+// The "you already picked these" row — always visible so the current
+// selection is never hidden, but never mixed in with the full catalog.
+function renderOttSelectedRow() {
+    if (!ottSelectedRow) return;
+    ottSelectedRow.innerHTML = "";
+    if (!ottPendingSelection.size) {
+        const empty = document.createElement("span");
+        empty.className = "ott-settings-status";
+        empty.textContent = t("ott_selected_empty");
+        ottSelectedRow.appendChild(empty);
+        return;
+    }
+    const frag = document.createDocumentFragment();
+    [...ottPendingSelection].forEach((id) => {
+        const p = (ottProviderCatalog || []).find((x) => x.id === id);
+        if (!p) return;
+        frag.appendChild(buildOttChip(p, {
+            selected: true,
+            removable: true,
+            onClick: () => {
+                ottPendingSelection.delete(id);
+                hapticFeedback(6);
+                renderOttSelectedRow();
+                renderOttResultsRow(ottSearchInput ? ottSearchInput.value : "");
+            }
+        }));
+    });
+    ottSelectedRow.appendChild(frag);
+}
+
+// Search results row — empty until the user actually types something, so
+// the whole catalog never dumps onto the screen at once.
+function renderOttResultsRow(query) {
+    if (!ottResultsRow) return;
+    ottResultsRow.innerHTML = "";
+    const q = (query || "").trim().toLowerCase();
+    if (!q) return;
+    const matches = (ottProviderCatalog || [])
+        .filter((p) => !ottPendingSelection.has(p.id) && p.name.toLowerCase().includes(q))
+        .slice(0, 8);
+    if (!matches.length) {
+        const empty = document.createElement("span");
+        empty.className = "ott-settings-status";
+        empty.textContent = t("ott_search_empty");
+        ottResultsRow.appendChild(empty);
+        return;
+    }
+    const frag = document.createDocumentFragment();
+    matches.forEach((p) => {
+        frag.appendChild(buildOttChip(p, {
+            selected: false,
+            removable: false,
+            onClick: () => {
+                ottPendingSelection.add(p.id);
+                hapticFeedback(6);
+                if (ottSearchInput) ottSearchInput.value = "";
+                renderOttSelectedRow();
+                renderOttResultsRow("");
+            }
+        }));
+    });
+    ottResultsRow.appendChild(frag);
+}
+
+// Renders the "My Subscriptions" search-and-select UI inside Settings. The
+// section itself is only ever shown for a signed-in user — called from
 // openSettingsModal() and renderAccountUI() (login/logout/account switch).
 async function renderOttSettingsSection() {
     if (!settingsSubsSection) return;
@@ -4406,41 +4515,29 @@ async function renderOttSettingsSection() {
         return;
     }
     settingsSubsSection.classList.remove("hidden");
-    if (!ottChipRow) return;
-    ottChipRow.innerHTML = `<span class="ott-settings-status">${t("ott_loading")}</span>`;
+    if (!ottSelectedRow || !ottResultsRow) return;
+    if (ottSearchInput) ottSearchInput.value = "";
+    ottResultsRow.innerHTML = "";
+    ottSelectedRow.innerHTML = `<span class="ott-settings-status">${t("ott_loading")}</span>`;
     const catalog = await loadOttProviderCatalog();
     if (!currentUser) return; // signed out while the catalog was loading
     if (!catalog.length) {
-        ottChipRow.innerHTML = `<span class="ott-settings-status">${t("ott_load_error")}</span>`;
+        ottSelectedRow.innerHTML = `<span class="ott-settings-status">${t("ott_load_error")}</span>`;
         return;
     }
-    const selected = new Set(getSelectedOtt());
-    ottChipRow.innerHTML = "";
-    const frag = document.createDocumentFragment();
-    catalog.forEach((p) => {
-        const chip = document.createElement("button");
-        chip.type = "button";
-        chip.className = "ott-chip" + (selected.has(p.id) ? " selected" : "");
-        if (p.logo_path) {
-            const img = document.createElement("img");
-            img.src = `${TMDB_LOGO_URL}${p.logo_path}`;
-            img.alt = "";
-            img.loading = "lazy";
-            chip.appendChild(img);
-        }
-        const label = document.createElement("span");
-        label.textContent = p.name;
-        chip.appendChild(label);
-        chip.addEventListener("click", () => {
-            const current = new Set(getSelectedOtt());
-            if (current.has(p.id)) current.delete(p.id); else current.add(p.id);
-            setSelectedOtt([...current]);
-            chip.classList.toggle("selected");
-            hapticFeedback(6);
-        });
-        frag.appendChild(chip);
+    ottPendingSelection = new Set(getSelectedOtt());
+    renderOttSelectedRow();
+}
+
+if (ottSearchInput) {
+    ottSearchInput.addEventListener("input", () => renderOttResultsRow(ottSearchInput.value));
+}
+if (ottSaveBtn) {
+    ottSaveBtn.addEventListener("click", () => {
+        setSelectedOtt([...ottPendingSelection]);
+        hapticFeedback(8);
+        showMovieHomeToast(t("ott_saved_toast"));
     });
-    ottChipRow.appendChild(frag);
 }
 
 // Recognized OTT display names -> their public website, so a platform pill
