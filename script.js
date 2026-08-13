@@ -876,7 +876,10 @@ const moviePoster = document.getElementById("movie-poster");
 const moviePosterWrap = document.querySelector(".poster-wrap");
 if (moviePoster && moviePosterWrap) {
     moviePoster.addEventListener("load", () => moviePosterWrap.classList.remove("is-loading-poster"));
-    moviePoster.addEventListener("error", () => moviePosterWrap.classList.remove("is-loading-poster"));
+    moviePoster.addEventListener("error", () => {
+        moviePosterWrap.classList.remove("is-loading-poster");
+        if (moviePoster.src !== PLACEHOLDER_POSTER) moviePoster.src = PLACEHOLDER_POSTER;
+    });
 }
 const movieTitle = document.getElementById("movie-title");
 const movieYear = document.getElementById("movie-year");
@@ -1529,7 +1532,7 @@ function renderSearchResults(results, query) {
         const titleHtml = query ? highlightMatch(movie.title || "", query) : (movie.title || "");
         
         item.innerHTML = `
-            <img src="${posterPath}" alt="${movie.title}" loading="lazy">
+            <img src="${posterPath}" alt="${movie.title}" loading="lazy" onerror="this.onerror=null;this.src='${PLACEHOLDER_POSTER}';">
             <div class="search-item-info">
                 <span class="search-item-title">${titleHtml}</span>
                 <span class="search-item-year">${year} • ⭐ ${movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A'}</span>
@@ -1687,7 +1690,7 @@ function renderBrowseGrid(movies, mode) {
         }
 
         card.innerHTML = `
-            <img src="${posterPath}" alt="${movie.title || ''}" loading="lazy">
+            <img src="${posterPath}" alt="${movie.title || ''}" loading="lazy" onerror="this.onerror=null;this.src='${PLACEHOLDER_POSTER}';">
             <span class="browse-card-rating">${rating}</span>
             <div class="browse-card-quick-actions">
                 <button class="browse-card-wishlist-btn" aria-label="Save to wishlist" title="Save to wishlist">
@@ -2374,7 +2377,8 @@ function renderMovie(movie) {
 
     // Stop any in-progress "Explain" narration from the previous movie.
     if (typeof isExplainBusy !== "undefined" && isExplainBusy) {
-        if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+        if (typeof cancelAllSpeaking === "function") cancelAllSpeaking();
+        else if ("speechSynthesis" in window) window.speechSynthesis.cancel();
         isExplainBusy = false;
         setExplainBtnState("idle");
     }
@@ -2898,6 +2902,120 @@ function primeSpeechVoices() {
 }
 primeSpeechVoices();
 
+// -----------------------------------------------------------
+// 15d-i. GEMINI TTS — natural AI voice (like the Gemini app),
+// replaces the old robotic browser voice. Falls back to the
+// browser's built-in voice automatically if a call ever fails
+// (offline, quota hit, etc.) so narration never goes silent.
+// -----------------------------------------------------------
+const GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview";
+const GEMINI_TTS_VOICE = "Kore"; // warm, natural narrator voice
+const GEMINI_TTS_URL = `${TMDB_BASE_URL.replace("/3", "")}/gemini/v1beta/models/${GEMINI_TTS_MODEL}:generateContent`;
+
+let currentTTSAudio = null;
+
+// Gemini TTS returns raw 16-bit PCM audio (24kHz, mono) with no file header.
+// Wrapping it in a standard WAV header lets a plain <audio> element play it.
+function pcmToWavBlob(base64Pcm, sampleRate = 24000) {
+    const binary = atob(base64Pcm);
+    const pcmLen = binary.length;
+    const buffer = new ArrayBuffer(44 + pcmLen);
+    const view = new DataView(buffer);
+    const writeStr = (offset, str) => {
+        for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+    };
+    writeStr(0, "RIFF");
+    view.setUint32(4, 36 + pcmLen, true);
+    writeStr(8, "WAVE");
+    writeStr(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, 1, true); // mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true); // byte rate
+    view.setUint16(32, 2, true); // block align
+    view.setUint16(34, 16, true); // bits per sample
+    writeStr(36, "data");
+    view.setUint32(40, pcmLen, true);
+    for (let i = 0; i < pcmLen; i++) view.setUint8(44 + i, binary.charCodeAt(i));
+    return new Blob([buffer], { type: "audio/wav" });
+}
+
+// Speaks one chunk of text with Gemini's AI voice via our worker proxy.
+// Resolves true on success, false on any failure (caller then falls back
+// to the browser voice for that sentence).
+function speakWithGeminiTTS(text) {
+    return new Promise((resolve) => {
+        fetchWithTimeout(GEMINI_TTS_URL, AI_FETCH_TIMEOUT_MS, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text }] }],
+                generationConfig: {
+                    responseModalities: ["AUDIO"],
+                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: GEMINI_TTS_VOICE } } }
+                }
+            })
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                const part = data && data.candidates && data.candidates[0] &&
+                    data.candidates[0].content && data.candidates[0].content.parts &&
+                    data.candidates[0].content.parts[0];
+                const b64 = part && part.inlineData && part.inlineData.data;
+                if (!b64) throw new Error("no-audio");
+                const blob = pcmToWavBlob(b64);
+                const audio = new Audio(URL.createObjectURL(blob));
+                currentTTSAudio = audio;
+                audio.onended = () => resolve(true);
+                audio.onerror = () => resolve(false);
+                audio.play().catch(() => resolve(false));
+            })
+            .catch(() => resolve(false));
+    });
+}
+
+// Stops whatever is currently speaking — Gemini audio or the browser
+// fallback voice — used everywhere we previously called
+// window.speechSynthesis.cancel() alone.
+function cancelAllSpeaking() {
+    if (currentTTSAudio) {
+        currentTTSAudio.pause();
+        currentTTSAudio = null;
+    }
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+}
+
+// Speaks one sentence with Gemini TTS, falling back to the browser voice
+// for just that sentence if the Gemini call fails. onStart fires the
+// moment audio actually begins (Gemini audio, or the fallback utterance).
+async function speakSentenceSmart(sentence, langCode, onStart) {
+    const ok = await speakWithGeminiTTS(sentence);
+    if (ok) {
+        if (onStart) onStart();
+        return new Promise((resolve) => {
+            if (!currentTTSAudio) { resolve(); return; }
+            currentTTSAudio.addEventListener("ended", () => resolve(), { once: true });
+            currentTTSAudio.addEventListener("error", () => resolve(), { once: true });
+        });
+    }
+    // Fallback: old browser voice for this sentence only.
+    return new Promise((resolve) => {
+        if (!("speechSynthesis" in window)) { resolve(); return; }
+        const utterance = new SpeechSynthesisUtterance(sentence);
+        utterance.lang = langCode;
+        const voice = pickVoiceForLang(langCode);
+        if (voice) utterance.voice = voice;
+        const prosody = expressiveProsodyFor(sentence);
+        utterance.rate = prosody.rate;
+        utterance.pitch = prosody.pitch;
+        utterance.onstart = () => { if (onStart) onStart(); };
+        utterance.onend = resolve;
+        utterance.onerror = resolve;
+        window.speechSynthesis.speak(utterance);
+    });
+}
+
 function pickVoiceForLang(langCode) {
     if (!("speechSynthesis" in window)) return null;
     const voices = window.speechSynthesis.getVoices() || [];
@@ -3027,22 +3145,15 @@ function speakQueue(sentences, langCode, onFirstStart, onAllDone) {
     if (!sentences.length) { onAllDone(); return; }
     let i = 0;
     let startedOnce = false;
-    function speakNext() {
+    async function speakNext() {
         if (!isExplainBusy) return;
         if (i >= sentences.length) { onAllDone(); return; }
-        const utterance = new SpeechSynthesisUtterance(sentences[i]);
-        utterance.lang = langCode;
-        const voice = pickVoiceForLang(langCode);
-        if (voice) utterance.voice = voice;
-        const prosody = expressiveProsodyFor(sentences[i]);
-        utterance.rate = prosody.rate;
-        utterance.pitch = prosody.pitch;
-        utterance.onstart = () => {
+        await speakSentenceSmart(sentences[i], langCode, () => {
             if (!startedOnce) { startedOnce = true; onFirstStart(); }
-        };
-        utterance.onend = () => { i += 1; speakNext(); };
-        utterance.onerror = () => { i += 1; speakNext(); };
-        window.speechSynthesis.speak(utterance);
+        });
+        if (!isExplainBusy) return;
+        i += 1;
+        speakNext();
     }
     speakNext();
 }
@@ -3109,14 +3220,10 @@ async function streamExplainText(promptText, onSentenceReady) {
 
 async function explainMovie(movie) {
     if (!movie || !movieExplainBtn) return;
-    if (!("speechSynthesis" in window)) {
-        appendExplainError();
-        return;
-    }
 
     // Tap again while speaking/loading -> stop.
     if (isExplainBusy) {
-        window.speechSynthesis.cancel();
+        cancelAllSpeaking();
         isExplainBusy = false;
         setExplainBtnState("idle");
         return;
@@ -3154,20 +3261,13 @@ async function explainMovie(movie) {
             }
             queueRunning = true;
             const next = sentenceQueue.shift();
-            const utterance = new SpeechSynthesisUtterance(next);
-            utterance.lang = langCode;
-            const voice = pickVoiceForLang(langCode);
-            if (voice) utterance.voice = voice;
-            const prosody = expressiveProsodyFor(next);
-            utterance.rate = prosody.rate;
-            utterance.pitch = prosody.pitch;
-            utterance.onstart = () => setExplainBtnState("speaking");
-            utterance.onend = () => { queueRunning = false; pump(); };
-            utterance.onerror = () => { queueRunning = false; pump(); };
-            window.speechSynthesis.speak(utterance);
+            speakSentenceSmart(next, langCode, () => setExplainBtnState("speaking")).then(() => {
+                queueRunning = false;
+                pump();
+            });
         }
 
-        window.speechSynthesis.cancel();
+        cancelAllSpeaking();
         fullCollected = await streamExplainText(buildExplainPrompt(movie, persona), (sentence) => {
             if (!isExplainBusy) return;
             sentenceQueue.push(sentence);
@@ -3201,10 +3301,9 @@ let browseExplainBusy = false;
 
 async function explainBrowseCard(movie, btnEl) {
     if (!movie || !btnEl) return;
-    if (!("speechSynthesis" in window)) return;
 
     if (browseExplainBusy) {
-        window.speechSynthesis.cancel();
+        cancelAllSpeaking();
         browseExplainBusy = false;
         document.querySelectorAll(".browse-card-explain-btn.is-loading, .browse-card-explain-btn.is-speaking")
             .forEach((el) => el.classList.remove("is-loading", "is-speaking"));
@@ -3224,30 +3323,23 @@ async function explainBrowseCard(movie, btnEl) {
         const sentences = splitIntoSentences(text);
         let i = 0;
 
-        function speakNext() {
+        async function speakNext() {
             if (!browseExplainBusy) return;
             if (i >= sentences.length) {
                 browseExplainBusy = false;
                 btnEl.classList.remove("is-loading", "is-speaking");
                 return;
             }
-            const utterance = new SpeechSynthesisUtterance(sentences[i]);
-            utterance.lang = langCode;
-            const voice = pickVoiceForLang(langCode);
-            if (voice) utterance.voice = voice;
-            const prosody = expressiveProsodyFor(sentences[i]);
-            utterance.rate = prosody.rate;
-            utterance.pitch = prosody.pitch;
-            utterance.onstart = () => {
+            await speakSentenceSmart(sentences[i], langCode, () => {
                 btnEl.classList.remove("is-loading");
                 btnEl.classList.add("is-speaking");
-            };
-            utterance.onend = () => { i += 1; speakNext(); };
-            utterance.onerror = () => { i += 1; speakNext(); };
-            window.speechSynthesis.speak(utterance);
+            });
+            if (!browseExplainBusy) return;
+            i += 1;
+            speakNext();
         }
 
-        window.speechSynthesis.cancel();
+        cancelAllSpeaking();
         speakNext();
     } catch (err) {
         browseExplainBusy = false;
@@ -3708,7 +3800,7 @@ async function renderHomeTrendingStrip() {
             const item = document.createElement("div");
             item.className = "home-trending-item";
             const posterPath = movie.poster_path ? `${TMDB_IMG_URL}${movie.poster_path}` : PLACEHOLDER_POSTER;
-            item.innerHTML = `<img src="${posterPath}" alt="${movie.title || ''}" loading="lazy">`;
+            item.innerHTML = `<img src="${posterPath}" alt="${movie.title || ''}" loading="lazy" onerror="this.onerror=null;this.src='${PLACEHOLDER_POSTER}';">`;
             item.addEventListener("click", () => loadSharedMovie(movie.id));
             frag.appendChild(item);
         });
@@ -3921,7 +4013,7 @@ function renderRecentlyViewedRail() {
         const item = document.createElement("div");
         item.className = "home-trending-item";
         const posterPath = movie.poster_path ? `${TMDB_IMG_URL}${movie.poster_path}` : PLACEHOLDER_POSTER;
-        item.innerHTML = `<img src="${posterPath}" alt="${movie.title}" loading="lazy">`;
+        item.innerHTML = `<img src="${posterPath}" alt="${movie.title}" loading="lazy" onerror="this.onerror=null;this.src='${PLACEHOLDER_POSTER}';">`;
         item.addEventListener("click", () => loadSharedMovie(movie.id));
         frag.appendChild(item);
     });
