@@ -3521,6 +3521,7 @@ async function handleGoogleAuthRedirect() {
         // from other devices (keyed by this account's "sub" in our own
         // Worker KV) and reconcile with whatever's local here.
         syncWishlistFromCloud();
+        syncLastMovieFromCloud();
         return true;
     } catch (e) {
         showMovieHomeToast("⚠️ Couldn't complete Google sign-in. Please try again.");
@@ -3538,7 +3539,10 @@ function restoreSavedGoogleSession() {
         }
     } catch (e) {}
     // Sync on every load (refresh, revisit, etc.) — no token to check now.
-    if (currentUser) syncWishlistFromCloud();
+    if (currentUser) {
+        syncWishlistFromCloud();
+        syncLastMovieFromCloud();
+    }
 }
 
 // --- Wishlist sync via our own Cloudflare Worker (Workers KV, keyed by the
@@ -3610,16 +3614,90 @@ async function pushWishlistToCloud(list) {
     }
 }
 
+// --- "Continue with X" resume chip sync — same idea as the wishlist, but
+//     for the single last-watched movie. Stored in the SAME Worker KV
+//     (no extra binding needed), just under a "lastmovie:<sub>" key
+//     instead of "wishlist:<sub>". Each saved entry carries an updatedAt
+//     timestamp so that when two devices have different last-watched
+//     movies, whichever one was set more recently wins. ---
+const LASTMOVIE_API = `${TMDB_BASE_URL.replace("/3", "")}/lastmovie`;
+let lastMovieSyncInFlight = false;
+
+async function fetchLastMovieFromServer(sub) {
+    const res = await fetch(`${LASTMOVIE_API}/${encodeURIComponent(sub)}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error("lastmovie-fetch-failed");
+    const data = await res.json();
+    return data && data.id ? data : null;
+}
+
+async function pushLastMovieToServer(sub, entry) {
+    const res = await fetch(`${LASTMOVIE_API}/${encodeURIComponent(sub)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entry)
+    });
+    if (!res.ok) throw new Error("lastmovie-push-failed");
+}
+
+// Fire-and-forget push, called after every local "last movie" change.
+async function pushLastMovieToCloud(entry) {
+    if (!currentUser) return;
+    try {
+        await pushLastMovieToServer(currentUser.sub, entry);
+    } catch (e) {
+        // Will simply retry on the next change, or reconcile at next sync.
+    }
+}
+
+// Pulls the cloud copy (if any), compares timestamps with whatever's local
+// on this device, keeps the newer one, saves+renders it, and pushes it
+// back up if the local copy turned out to be the newer one.
+async function syncLastMovieFromCloud() {
+    if (!currentUser || lastMovieSyncInFlight) return;
+    lastMovieSyncInFlight = true;
+    try {
+        const cloudEntry = await fetchLastMovieFromServer(currentUser.sub);
+        let localEntry = null;
+        try {
+            localEntry = JSON.parse(localStorage.getItem(lastMovieStorageKey()) || "null");
+        } catch (e) {}
+
+        let winner = localEntry;
+        if (cloudEntry && (!localEntry || (cloudEntry.updatedAt || 0) > (localEntry.updatedAt || 0))) {
+            winner = cloudEntry;
+        }
+        if (winner) {
+            try {
+                localStorage.setItem(lastMovieStorageKey(), JSON.stringify(winner));
+            } catch (e) {}
+            renderResumeChip();
+        }
+        if (winner && (!cloudEntry || (winner.updatedAt || 0) > (cloudEntry.updatedAt || 0))) {
+            await pushLastMovieToServer(currentUser.sub, winner);
+        }
+    } catch (e) {
+        // Offline or Worker hiccup — the local chip still works fine, we
+        // just skip syncing this time.
+    } finally {
+        lastMovieSyncInFlight = false;
+    }
+}
+
 // Re-sync whenever this tab/app becomes visible again (app switch, unlock,
 // tab refocus) — not just right after sign-in — so items added on another
 // signed-in device (e.g. desktop) show up here without a manual re-login.
 document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && currentUser) {
         syncWishlistFromCloud();
+        syncLastMovieFromCloud();
     }
 });
 window.addEventListener("focus", () => {
-    if (currentUser) syncWishlistFromCloud();
+    if (currentUser) {
+        syncWishlistFromCloud();
+        syncLastMovieFromCloud();
+    }
 });
 
 function signOutUser() {
@@ -3786,12 +3864,16 @@ function renderResumeChip() {
 
 function rememberLastMovie(movie) {
     if (!movie || !movie.id) return;
+    const entry = {
+        id: movie.id,
+        title: movie.title || "",
+        poster_path: movie.poster_path || "",
+        updatedAt: Date.now()
+    };
     try {
-        localStorage.setItem(
-            lastMovieStorageKey(),
-            JSON.stringify({ id: movie.id, title: movie.title || "", poster_path: movie.poster_path || "" })
-        );
+        localStorage.setItem(lastMovieStorageKey(), JSON.stringify(entry));
     } catch (e) {}
+    pushLastMovieToCloud(entry);
 }
 
 async function renderHomeTrendingStrip() {
