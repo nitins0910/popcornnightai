@@ -3008,6 +3008,16 @@ h1, h2, h3 {
 }
 .home-trending-strip:hover::-webkit-scrollbar-thumb { background: rgba(255, 210, 63, 0.55); }
 
+/* Recently Viewed rail — scrolling still works, the scrollbar track itself
+   is just hidden so it doesn't show a bar under the row. */
+#home-recent-strip {
+    scrollbar-width: none;       /* Firefox */
+    -ms-overflow-style: none;    /* old Edge/IE */
+}
+#home-recent-strip::-webkit-scrollbar {
+    display: none;               /* Chrome/Safari/new Edge */
+}
+
 .home-trending-item {
     flex: 0 0 auto;
     width: 88px;
