@@ -158,19 +158,43 @@
 
             <div id="quick-actions-grid" class="quick-actions-grid">
                 <button class="home-chip quick-action-card qa-watchparty" id="chip-watchparty" data-mode="watchparty">
-                    <span class="qa-icon" aria-hidden="true">🎉</span>
+                    <span class="qa-icon-badge" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="9" cy="8" r="3"></circle>
+                            <path d="M4 19c0-3 2.5-5 5-5s5 2 5 5"></path>
+                            <circle cx="17" cy="8.3" r="2.3"></circle>
+                            <path d="M15 14.3c2 .35 3.6 2.05 3.9 4.3"></path>
+                        </svg>
+                    </span>
                     <span class="qa-label">Watch Party</span>
                 </button>
                 <button class="home-chip quick-action-card qa-trending" id="chip-trending" data-mode="trending">
-                    <span class="qa-icon" aria-hidden="true">🔥</span>
+                    <span class="qa-icon-badge" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 17 9 11 13 15 21 6"></polyline>
+                            <polyline points="15 6 21 6 21 12"></polyline>
+                        </svg>
+                    </span>
                     <span class="qa-label">Trending</span>
                 </button>
                 <button class="home-chip quick-action-card qa-theaters" id="chip-theaters" data-mode="theaters">
-                    <span class="qa-icon" aria-hidden="true">🎟️</span>
+                    <span class="qa-icon-badge" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1.5a2 2 0 0 0 0 3V15a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1.5a2 2 0 0 0 0-3z"></path>
+                            <line x1="10.5" y1="7" x2="10.5" y2="17" stroke-dasharray="2.2 2.6"></line>
+                        </svg>
+                    </span>
                     <span class="qa-label">In Theaters</span>
                 </button>
                 <button class="home-chip quick-action-card qa-upcoming" id="chip-upcoming" data-mode="upcoming">
-                    <span class="qa-icon" aria-hidden="true">📅</span>
+                    <span class="qa-icon-badge" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="5" width="18" height="15" rx="3"></rect>
+                            <path d="M3 10h18"></path>
+                            <path d="M8 3v4M16 3v4"></path>
+                            <circle cx="15.4" cy="15" r="1.3" fill="currentColor" stroke="none"></circle>
+                        </svg>
+                    </span>
                     <span class="qa-label">Coming Soon</span>
                 </button>
             </div>
@@ -195,19 +219,9 @@
                 <button class="home-chip" id="chip-wishlist" data-mode="wishlist">💖 Wishlist</button>
             </div>
 
-            <div id="ott-select-section" class="ott-select-section">
-                <div class="ott-select-heading" id="ott-select-heading">📺 What do you have?</div>
-                <div id="ott-chip-row" class="ott-chip-row"></div>
-            </div>
-
             <div id="home-recently-viewed-section" class="home-trending-section hidden">
                 <div class="home-trending-heading" id="home-recent-heading">🕓 Recently Viewed</div>
                 <div id="home-recent-strip" class="home-trending-strip"></div>
-            </div>
-
-            <div id="home-trending-section" class="home-trending-section hidden">
-                <div class="home-trending-heading">🔥 Trending Right Now</div>
-                <div id="home-trending-strip" class="home-trending-strip"></div>
             </div>
         </div>
 
@@ -315,6 +329,8 @@
                             <a id="youtube-free-link" class="youtube-free-link hidden" href="#" target="_blank" rel="noopener">🎬 Find Free on YouTube</a>
                             <a id="ticket-affiliate-link" class="ticket-affiliate-link hidden" href="#" target="_blank" rel="noopener sponsored">🎟️ Book Tickets</a>
                         </div>
+
+                        <p id="you-can-watch-badge" class="you-can-watch-badge hidden"></p>
 
                         <div id="free-section" class="platform-section hidden">
                             <span class="platform-label" id="free-label">Free to watch</span>
@@ -524,6 +540,10 @@
                     <input type="checkbox" id="notif-toggle-input">
                     <span class="spoiler-toggle-track"><span class="spoiler-toggle-thumb"></span></span>
                 </label>
+            </div>
+            <div id="settings-subs-section" class="settings-subs-section hidden">
+                <div class="settings-subs-heading" id="settings-ott-heading">📺 What do you have?</div>
+                <div id="settings-ott-chip-row" class="ott-chip-row"></div>
             </div>
         </div>
     </div>

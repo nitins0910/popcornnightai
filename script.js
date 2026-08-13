@@ -182,8 +182,9 @@ function buildAiPrompt() {
         .map((h, i) => `Q${i + 1}: ${h.question}\nUser answered: ${h.answer}`)
         .join("\n");
 
+    const ottCatalog = ottProviderCatalog || [];
     const ottNames = (typeof getSelectedOtt === "function" ? getSelectedOtt() : [])
-        .map((id) => (OTT_PROVIDERS.find((p) => p.id === id) || {}).name)
+        .map((id) => (ottCatalog.find((p) => p.id === id) || {}).name)
         .filter(Boolean);
     const ottLine = ottNames.length
         ? `\n\nThe user has told the app they subscribe to: ${ottNames.join(", ")}. Where reasonable, lean slightly toward movies likely available on these services, but never sacrifice a genuinely great match just to fit this.`
@@ -466,6 +467,10 @@ const TRANSLATIONS = {
         mood_error: "Couldn't quite place that mood — try describing it a bit differently.",
         recent_heading: "🕓 Recently Viewed",
         ott_heading: "📺 What do you have?",
+        ott_loading: "Loading your streaming services...",
+        ott_load_error: "Couldn't load the list right now. Please try again later.",
+        you_can_watch_badge: "✅ You can watch this — it's on your {provider}",
+        ott_visit_site: "Open {provider}",
         spoiler_toggle_label: "Spoiler-safe",
         explain_loading_eli5: "Preparing (simple)...",
         explain_loading_critic: "Preparing (critic)...",
@@ -634,6 +639,10 @@ const TRANSLATIONS = {
         mood_error: "यह मूड समझ नहीं आया — थोड़ा अलग तरीके से बताएं।",
         recent_heading: "🕓 हाल ही में देखा",
         ott_heading: "📺 आपके पास क्या है?",
+        ott_loading: "आपकी स्ट्रीमिंग सर्विसेज़ लोड हो रही हैं...",
+        ott_load_error: "अभी लिस्ट लोड नहीं हो पाई। कृपया बाद में फिर कोशिश करें।",
+        you_can_watch_badge: "✅ आप इसे देख सकते हैं — यह आपके {provider} पर उपलब्ध है",
+        ott_visit_site: "{provider} खोलें",
         spoiler_toggle_label: "स्पॉइलर-सेफ",
         explain_loading_eli5: "तैयार हो रहा है (सरल)...",
         explain_loading_critic: "तैयार हो रहा है (समीक्षक)...",
@@ -954,6 +963,7 @@ const platformsSection = document.getElementById("platforms-section");
 const platformsLabel = document.getElementById("platforms-label");
 const streamingPlatforms = document.getElementById("streaming-platforms");
 const streamingNone = document.getElementById("streaming-none");
+const youCanWatchBadge = document.getElementById("you-can-watch-badge");
 const movieError = document.getElementById("movie-error");
 const nextMovieBtn = document.getElementById("next-movie-btn");
 const movieArrowPrevBtn = document.getElementById("movie-arrow-prev");
@@ -997,17 +1007,16 @@ const resumeChip = document.getElementById("resume-chip");
 const resumeChipPoster = document.getElementById("resume-chip-poster");
 const resumeChipTitle = document.getElementById("resume-chip-title");
 const homeQuickChips = document.getElementById("home-quick-chips");
-const homeTrendingSection = document.getElementById("home-trending-section");
-const homeTrendingStrip = document.getElementById("home-trending-strip");
-const homeTrendingHeadingEl = document.querySelector(".home-trending-heading");
+
 const startSubtitleEl = document.getElementById("start-subtitle");
 
 // Phase 2 enhancement refs
 const moodInput = document.getElementById("mood-input");
 const moodSubmitBtn = document.getElementById("mood-submit-btn");
 const moodError = document.getElementById("mood-error");
-const ottChipRow = document.getElementById("ott-chip-row");
-const ottSelectHeading = document.getElementById("ott-select-heading");
+const ottChipRow = document.getElementById("settings-ott-chip-row");
+const ottSelectHeading = document.getElementById("settings-ott-heading");
+const settingsSubsSection = document.getElementById("settings-subs-section");
 const homeRecentSection = document.getElementById("home-recently-viewed-section");
 const homeRecentStrip = document.getElementById("home-recent-strip");
 const homeRecentHeadingEl = document.getElementById("home-recent-heading");
@@ -1204,6 +1213,7 @@ function applyStaticTranslations() {
     if (userDropdownWishlistBtn) userDropdownWishlistBtn.textContent = t("my_wishlist_btn");
     if (settingsModalTitle) settingsModalTitle.textContent = t("settings_title");
     if (settingsLanguageLabel) settingsLanguageLabel.textContent = t("settings_language_label");
+    if (ottSelectHeading) ottSelectHeading.textContent = t("ott_heading");
     document.querySelectorAll(".home-chip").forEach((chip) => {
         const mode = chip.dataset.mode;
         if (!mode) return;
@@ -1214,7 +1224,6 @@ function applyStaticTranslations() {
             chip.textContent = t(`chip_${mode}`);
         }
     });
-    if (homeTrendingHeadingEl) homeTrendingHeadingEl.textContent = t("home_trending_heading");
     if (resumeChip && !resumeChip.classList.contains("hidden")) {
         const resumeLabelEl = resumeChip.querySelector(".resume-chip-label");
         if (resumeLabelEl) resumeLabelEl.textContent = t("resume_chip_label");
@@ -1962,6 +1971,7 @@ function closeLocationModal() {
 
 function openSettingsModal() {
     if (settingsModal) settingsModal.classList.remove("hidden");
+    renderOttSettingsSection();
 }
 
 function closeSettingsModal() {
@@ -2539,6 +2549,7 @@ function renderMovie(movie) {
     freeSection.classList.add("hidden");
     platformsSection.classList.add("hidden");
     streamingNone.classList.add("hidden");
+    if (youCanWatchBadge) youCanWatchBadge.classList.add("hidden");
 
     if (movieWishlistBtn) {
         movieWishlistBtn.classList.toggle("is-saved", currentUser ? isInWishlist(movie.id) : false);
@@ -2563,9 +2574,22 @@ function renderGenres(movie) {
     movieGenres.classList.remove("hidden");
 }
 
+// Builds one streaming-platform pill. Wrapped as a clickable link (opens
+// the OTT's website in a new tab) whenever we recognize the provider name;
+// falls back to a plain non-clickable span otherwise. The provider's real
+// TMDB id is stored on the dataset so markOwnedPlatforms() can match it
+// precisely against the user's saved subscriptions.
 function buildPlatformPill(provider) {
-    const pill = document.createElement("span");
+    const url = ottWebsiteUrl(provider.provider_name);
+    const pill = document.createElement(url ? "a" : "span");
     pill.className = "platform-pill";
+    if (provider.provider_id != null) pill.dataset.providerId = provider.provider_id;
+    if (url) {
+        pill.href = url;
+        pill.target = "_blank";
+        pill.rel = "noopener";
+        pill.title = t("ott_visit_site", { provider: provider.provider_name || "" });
+    }
     if (provider.logo_path) {
         const img = document.createElement("img");
         img.src = `${TMDB_LOGO_URL}${provider.logo_path}`;
@@ -3069,67 +3093,74 @@ function pcmToWavBlob(base64Pcm, sampleRate = 24000) {
     return new Blob([buffer], { type: "audio/wav" });
 }
 
-// Speaks one chunk of text with Gemini's AI voice via our worker proxy.
-// Resolves true on success, false on any failure (caller then falls back
-// to the browser voice for that sentence).
-function speakWithGeminiTTS(text, onStart) {
-    return new Promise((resolve) => {
-        fetchWithTimeout(GEMINI_TTS_URL, AI_FETCH_TIMEOUT_MS, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text }] }],
-                generationConfig: {
-                    responseModalities: ["AUDIO"],
-                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: GEMINI_TTS_VOICE } } }
-                }
-            })
+// Fetches Gemini TTS audio for one chunk of text and resolves to a Blob (or
+// null on failure). Fetch-only — no playback — so this can be kicked off
+// AHEAD of time (while the previous sentence is still playing) instead of
+// only after it finishes. That's what removes the pause between sentences.
+function fetchGeminiTTSBlob(text) {
+    return fetchWithTimeout(GEMINI_TTS_URL, AI_FETCH_TIMEOUT_MS, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+        body: JSON.stringify({
+            contents: [{ parts: [{ text }] }],
+            generationConfig: {
+                responseModalities: ["AUDIO"],
+                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: GEMINI_TTS_VOICE } } }
+            }
         })
-            .then((res) => res.json())
-            .then((data) => {
-                const part = data && data.candidates && data.candidates[0] &&
-                    data.candidates[0].content && data.candidates[0].content.parts &&
-                    data.candidates[0].content.parts[0];
-                const b64 = part && part.inlineData && part.inlineData.data;
-                if (!b64) throw new Error("no-audio");
-                const blob = pcmToWavBlob(b64);
-                const audio = new Audio(URL.createObjectURL(blob));
-                currentTTSAudio = audio;
-                // Fire onStart the moment playback actually begins, not after
-                // it ends — resolving the outer promise only on "ended"/"error"
-                // (below) so the caller doesn't have to (and can't safely)
-                // wait on the same "ended" event a second time after it has
-                // already fired once.
-                audio.onplay = () => { if (onStart) onStart(); };
-                audio.onended = () => resolve(true);
-                audio.onerror = () => resolve(false);
-                audio.play().catch(() => resolve(false));
-            })
-            .catch(() => resolve(false));
-    });
+    })
+        .then((res) => res.json())
+        .then((data) => {
+            const part = data && data.candidates && data.candidates[0] &&
+                data.candidates[0].content && data.candidates[0].content.parts &&
+                data.candidates[0].content.parts[0];
+            const b64 = part && part.inlineData && part.inlineData.data;
+            if (!b64) throw new Error("no-audio");
+            return pcmToWavBlob(b64);
+        })
+        .catch(() => null);
 }
 
-// Stops whatever is currently speaking — Gemini audio or the browser
-// fallback voice — used everywhere we previously called
-// window.speechSynthesis.cancel() alone.
-function cancelAllSpeaking() {
-    if (currentTTSAudio) {
-        currentTTSAudio.pause();
-        currentTTSAudio = null;
+// Cache of in-flight/completed TTS fetches keyed by sentence text, so a
+// sentence is ever only fetched once even if both the "prefetch ahead"
+// call and the normal playback call ask for it — whichever runs first
+// wins and the other just reuses the same promise. Cleared whenever
+// narration is cancelled/restarted so stale entries don't pile up.
+const ttsPrefetchCache = new Map();
+function prefetchGeminiTTS(text) {
+    if (!text) return Promise.resolve(null);
+    if (!ttsPrefetchCache.has(text)) {
+        ttsPrefetchCache.set(text, fetchGeminiTTSBlob(text));
     }
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    return ttsPrefetchCache.get(text);
 }
 
-// Speaks one sentence with Gemini TTS, falling back to the browser voice
-// for just that sentence if the Gemini call fails. onStart fires the
-// moment audio actually begins (Gemini audio, or the fallback utterance).
-async function speakSentenceSmart(sentence, langCode, onStart) {
-    // speakWithGeminiTTS already resolves only once this sentence's audio has
-    // finished playing (or errored), and fires onStart as soon as playback
-    // actually begins — so there is nothing further to await here.
-    const ok = await speakWithGeminiTTS(sentence, onStart);
-    if (ok) return;
-    // Fallback: old browser voice for this sentence only.
+// Plays an already-fetched blob (instant — no network wait). Falls back to
+// the browser voice for this sentence if the blob is null (fetch failed).
+// Resolves once playback ends.
+function speakWithGeminiTTS(blob, sentence, langCode, onStart) {
+    if (blob) {
+        return new Promise((resolve) => {
+            const audio = new Audio(URL.createObjectURL(blob));
+            currentTTSAudio = audio;
+            // Fire onStart the moment playback actually begins, not after
+            // it ends — resolving the outer promise only on "ended"/"error"
+            // (below) so the caller doesn't have to (and can't safely)
+            // wait on the same "ended" event a second time after it has
+            // already fired once.
+            audio.onplay = () => { if (onStart) onStart(); };
+            audio.onended = () => resolve();
+            audio.onerror = () => resolve();
+            audio.play().catch(() => resolve());
+        });
+    }
+    return speakWithBrowserVoice(sentence, langCode, onStart);
+}
+
+// Old built-in browser voice — used as the fallback for a single sentence
+// whenever Gemini TTS fails for it (offline, quota hit, etc.) so narration
+// never goes fully silent.
+function speakWithBrowserVoice(sentence, langCode, onStart) {
     return new Promise((resolve) => {
         if (!("speechSynthesis" in window)) { resolve(); return; }
         const utterance = new SpeechSynthesisUtterance(sentence);
@@ -3144,6 +3175,29 @@ async function speakSentenceSmart(sentence, langCode, onStart) {
         utterance.onerror = resolve;
         window.speechSynthesis.speak(utterance);
     });
+}
+
+// Stops whatever is currently speaking — Gemini audio or the browser
+// fallback voice — used everywhere we previously called
+// window.speechSynthesis.cancel() alone.
+function cancelAllSpeaking() {
+    if (currentTTSAudio) {
+        currentTTSAudio.pause();
+        currentTTSAudio = null;
+    }
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    // Drop any in-flight/finished prefetches from this narration so the
+    // next "Explain" starts clean and doesn't hold onto stale audio blobs.
+    ttsPrefetchCache.clear();
+}
+
+// Speaks one sentence: uses a prefetched Gemini TTS blob if one is already
+// in flight/ready (see prefetchGeminiTTS), otherwise fetches it now. onStart
+// fires the moment audio actually begins (Gemini audio, or the browser
+// fallback utterance).
+async function speakSentenceSmart(sentence, langCode, onStart) {
+    const blob = await prefetchGeminiTTS(sentence);
+    return speakWithGeminiTTS(blob, sentence, langCode, onStart);
 }
 
 function pickVoiceForLang(langCode) {
@@ -3278,6 +3332,10 @@ function speakQueue(sentences, langCode, onFirstStart, onAllDone) {
     async function speakNext() {
         if (!isExplainBusy) return;
         if (i >= sentences.length) { onAllDone(); return; }
+        // Start fetching the NEXT sentence's audio now, in parallel with
+        // this one playing, so it's already sitting ready by the time this
+        // one ends — this is what removes the pause/stutter between lines.
+        if (sentences[i + 1]) prefetchGeminiTTS(sentences[i + 1]);
         await speakSentenceSmart(sentences[i], langCode, () => {
             if (!startedOnce) { startedOnce = true; onFirstStart(); }
         });
@@ -3391,6 +3449,9 @@ async function explainMovie(movie) {
             }
             queueRunning = true;
             const next = sentenceQueue.shift();
+            // If the next-next sentence has already streamed in, start
+            // fetching its audio now too, in parallel with "next" playing.
+            if (sentenceQueue[0]) prefetchGeminiTTS(sentenceQueue[0]);
             speakSentenceSmart(next, langCode, () => setExplainBtnState("speaking")).then(() => {
                 queueRunning = false;
                 pump();
@@ -3401,6 +3462,10 @@ async function explainMovie(movie) {
         fullCollected = await streamExplainText(buildExplainPrompt(movie, persona), (sentence) => {
             if (!isExplainBusy) return;
             sentenceQueue.push(sentence);
+            // Start fetching this sentence's audio the instant it streams in,
+            // even before it's its turn to play — by the time earlier
+            // sentences finish speaking, this one is already ready.
+            prefetchGeminiTTS(sentence);
             pump();
         });
         streamDone = true;
@@ -3793,6 +3858,10 @@ function renderAccountUI() {
     // Account changed (sign-in / switch / sign-out) — the "Continue with"
     // chip is per-account, so re-check it against the newly active user.
     renderResumeChip();
+    // Same for saved OTT subscriptions in Settings — signed-out users never
+    // see that section, and switching accounts should show THAT account's
+    // saved subscriptions, not the previous one's.
+    renderOttSettingsSection();
 }
 
 // Small reusable toast for account/wishlist feedback — reuses the existing
@@ -3945,32 +4014,6 @@ function rememberLastMovie(movie) {
     pushLastMovieToCloud(entry);
 }
 
-async function renderHomeTrendingStrip() {
-    if (!homeTrendingStrip || !homeTrendingSection) return;
-    try {
-        const langParam = TMDB_LANG_MAP[currentLang] || "en-US";
-        const url = `${TMDB_BASE_URL}/trending/movie/week?api_key=${TMDB_API_KEY}&language=${langParam}&page=1`;
-        const data = await cachedFetchJson(url);
-        const movies = (data.results || []).slice(0, 12);
-        if (!movies.length) return;
-
-        homeTrendingStrip.innerHTML = "";
-        const frag = document.createDocumentFragment();
-        movies.forEach((movie) => {
-            const item = document.createElement("div");
-            item.className = "home-trending-item";
-            const posterPath = movie.poster_path ? `${TMDB_IMG_URL}${movie.poster_path}` : PLACEHOLDER_POSTER;
-            item.innerHTML = `<img src="${posterPath}" alt="${movie.title || ''}" loading="lazy" onerror="this.onerror=null;this.src='${PLACEHOLDER_POSTER}';">`;
-            item.addEventListener("click", () => loadSharedMovie(movie.id));
-            frag.appendChild(item);
-        });
-        homeTrendingStrip.appendChild(frag);
-        homeTrendingSection.classList.remove("hidden");
-    } catch (e) {
-        // Fail silently on the homescreen — this is a nice-to-have teaser,
-        // not core functionality, so we don't want to show an error state.
-    }
-}
 
 // Delegated on the whole start screen (not just #home-quick-chips) so this
 // also covers the Trending / In Theaters / Coming Soon quick-action cards
@@ -3992,8 +4035,6 @@ if (startScreen) {
 function initHomescreen() {
     setHomeGreeting();
     renderResumeChip();
-    renderHomeTrendingStrip();
-    if (homeTrendingHeadingEl) homeTrendingHeadingEl.textContent = t("home_trending_heading");
     document.querySelectorAll(".home-chip").forEach((chip) => {
         const mode = chip.dataset.mode;
         if (!mode) return;
@@ -4005,11 +4046,9 @@ function initHomescreen() {
         }
     });
     renderRecentlyViewedRail();
-    renderOttChips();
     if (moodInput) moodInput.placeholder = t("mood_placeholder");
     if (moodSubmitBtn) moodSubmitBtn.textContent = t("mood_submit_btn");
     if (homeRecentHeadingEl) homeRecentHeadingEl.textContent = t("recent_heading");
-    if (ottSelectHeading) ottSelectHeading.textContent = t("ott_heading");
     if (spoilerToggleLabel) spoilerToggleLabel.textContent = t("spoiler_toggle_label");
 }
 
@@ -4074,7 +4113,6 @@ function enableDragScroll(el) {
     });
 }
 
-enableDragScroll(homeTrendingStrip);
 enableDragScroll(homeRecentStrip);
 
 // --- Dynamic poster-as-color-theme (Canvas dominant color extraction) ---
@@ -4239,32 +4277,93 @@ if (moodInput) {
     });
 }
 
-// --- OTT-aware filtering (subscription chip selector) ---
-const OTT_PROVIDERS = [
-    { id: 8, name: "Netflix" },
-    { id: 119, name: "Prime Video" },
-    { id: 122, name: "Hotstar" },
-    { id: 337, name: "Disney+" },
-    { id: 350, name: "Apple TV+" }
-];
-const OTT_KEY = "popcornnight_ott_subs";
+// --- OTT-aware filtering (subscription checklist, lives in Settings and
+// only shows once the user is signed in) ---
 
+// The master provider list is pulled from TMDB's own /watch/providers/movie
+// endpoint — the exact same source that populates the "Streaming on" pills
+// on every movie card — so the checklist always covers every OTT that could
+// actually show up on a card, instead of a small hand-picked set.
+let ottProviderCatalog = null; // [{id, name, logo_path}, ...] once loaded
+let ottProviderCatalogPromise = null;
+
+function ottWatchRegion() {
+    return getStoredRegion() || "IN";
+}
+
+async function loadOttProviderCatalog() {
+    if (ottProviderCatalog) return ottProviderCatalog;
+    if (ottProviderCatalogPromise) return ottProviderCatalogPromise;
+    const langParam = TMDB_LANG_MAP[currentLang] || "en-US";
+    const url = `${TMDB_BASE_URL}/watch/providers/movie?api_key=${TMDB_API_KEY}&language=${langParam}&watch_region=${ottWatchRegion()}`;
+    ottProviderCatalogPromise = cachedFetchJson(url)
+        .then((data) => {
+            const results = (data && data.results) || [];
+            ottProviderCatalog = results
+                .map((p) => ({ id: p.provider_id, name: p.provider_name, logo_path: p.logo_path }))
+                .filter((p) => p.id && p.name)
+                .sort((a, b) => a.name.localeCompare(b.name));
+            return ottProviderCatalog;
+        })
+        .catch(() => {
+            ottProviderCatalog = [];
+            return ottProviderCatalog;
+        });
+    return ottProviderCatalogPromise;
+}
+
+// Saved subscriptions are namespaced per signed-in Google account (same
+// pattern as the wishlist) — there's no "guest" bucket on purpose, since
+// this whole feature is meant to only exist once someone is signed in.
+function ottSubsStorageKey() {
+    return currentUser ? `popcornnight_ott_subs_${currentUser.sub}` : null;
+}
 function getSelectedOtt() {
-    try { return JSON.parse(localStorage.getItem(OTT_KEY) || "[]"); } catch (e) { return []; }
+    const key = ottSubsStorageKey();
+    if (!key) return [];
+    try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) { return []; }
 }
 function setSelectedOtt(ids) {
-    try { localStorage.setItem(OTT_KEY, JSON.stringify(ids)); } catch (e) {}
+    const key = ottSubsStorageKey();
+    if (!key) return;
+    try { localStorage.setItem(key, JSON.stringify(ids)); } catch (e) {}
 }
 
-function renderOttChips() {
+// Renders the "My Subscriptions" checklist inside Settings. The section
+// itself is only ever shown for a signed-in user — called from
+// openSettingsModal() and renderAccountUI() (login/logout/account switch).
+async function renderOttSettingsSection() {
+    if (!settingsSubsSection) return;
+    if (!currentUser) {
+        settingsSubsSection.classList.add("hidden");
+        return;
+    }
+    settingsSubsSection.classList.remove("hidden");
     if (!ottChipRow) return;
+    ottChipRow.innerHTML = `<span class="ott-settings-status">${t("ott_loading")}</span>`;
+    const catalog = await loadOttProviderCatalog();
+    if (!currentUser) return; // signed out while the catalog was loading
+    if (!catalog.length) {
+        ottChipRow.innerHTML = `<span class="ott-settings-status">${t("ott_load_error")}</span>`;
+        return;
+    }
     const selected = new Set(getSelectedOtt());
     ottChipRow.innerHTML = "";
-    OTT_PROVIDERS.forEach((p) => {
+    const frag = document.createDocumentFragment();
+    catalog.forEach((p) => {
         const chip = document.createElement("button");
         chip.type = "button";
         chip.className = "ott-chip" + (selected.has(p.id) ? " selected" : "");
-        chip.textContent = p.name;
+        if (p.logo_path) {
+            const img = document.createElement("img");
+            img.src = `${TMDB_LOGO_URL}${p.logo_path}`;
+            img.alt = "";
+            img.loading = "lazy";
+            chip.appendChild(img);
+        }
+        const label = document.createElement("span");
+        label.textContent = p.name;
+        chip.appendChild(label);
         chip.addEventListener("click", () => {
             const current = new Set(getSelectedOtt());
             if (current.has(p.id)) current.delete(p.id); else current.add(p.id);
@@ -4272,25 +4371,89 @@ function renderOttChips() {
             chip.classList.toggle("selected");
             hapticFeedback(6);
         });
-        ottChipRow.appendChild(chip);
+        frag.appendChild(chip);
     });
+    ottChipRow.appendChild(frag);
 }
 
-// Highlights streaming pills that match the user's selected subscriptions —
-// called from loadMovieExtras() after platform pills are built.
+// Recognized OTT display names -> their public website, so a platform pill
+// on a movie card can link straight there (TMDB's free API doesn't give us
+// a deep link to the specific title on that service, only the provider's
+// identity — so this opens the service's homepage in a new tab).
+const OTT_WEBSITE_MAP = {
+    "netflix": "https://www.netflix.com/",
+    "amazon prime video": "https://www.primevideo.com/",
+    "prime video": "https://www.primevideo.com/",
+    "disney plus": "https://www.disneyplus.com/",
+    "disney+": "https://www.disneyplus.com/",
+    "disney+ hotstar": "https://www.hotstar.com/",
+    "hotstar": "https://www.hotstar.com/",
+    "apple tv": "https://tv.apple.com/",
+    "apple tv+": "https://tv.apple.com/",
+    "apple tv plus": "https://tv.apple.com/",
+    "hbo max": "https://www.max.com/",
+    "max": "https://www.max.com/",
+    "hulu": "https://www.hulu.com/",
+    "paramount+": "https://www.paramountplus.com/",
+    "paramount plus": "https://www.paramountplus.com/",
+    "peacock": "https://www.peacocktv.com/",
+    "mubi": "https://mubi.com/",
+    "jiocinema": "https://www.jiocinema.com/",
+    "jio cinema": "https://www.jiocinema.com/",
+    "zee5": "https://www.zee5.com/",
+    "sonyliv": "https://www.sonyliv.com/",
+    "sony liv": "https://www.sonyliv.com/",
+    "voot": "https://www.voot.com/",
+    "sun nxt": "https://www.sunnxt.com/",
+    "lionsgate play": "https://www.lionsgateplay.com/",
+    "google play movies": "https://play.google.com/store/movies",
+    "youtube": "https://www.youtube.com/",
+    "microsoft store": "https://www.microsoft.com/en-us/store/movies-and-tv",
+    "vudu": "https://www.vudu.com/",
+    "crunchyroll": "https://www.crunchyroll.com/",
+    "amc+": "https://www.amcplus.com/",
+    "amc plus": "https://www.amcplus.com/",
+    "starz": "https://www.starz.com/",
+    "discovery+": "https://www.discoveryplus.com/",
+    "discovery plus": "https://www.discoveryplus.com/"
+};
+
+function normalizeProviderName(name) {
+    return (name || "").toLowerCase().replace(/[^a-z0-9+ ]/g, "").trim();
+}
+
+function ottWebsiteUrl(providerName) {
+    const key = normalizeProviderName(providerName);
+    if (OTT_WEBSITE_MAP[key]) return OTT_WEBSITE_MAP[key];
+    // Loose fallback for TMDB name variants (e.g. "Jio Cinema Ads Included")
+    // that don't match one of the exact keys above.
+    const hit = Object.keys(OTT_WEBSITE_MAP).find((k) => key.includes(k));
+    return hit ? OTT_WEBSITE_MAP[hit] : null;
+}
+
+// Highlights streaming pills that match the user's saved subscriptions, and
+// surfaces a clear "you can watch this" banner naming the first match —
+// called from loadMovieExtras() after the paid ("Streaming on") pills are
+// built. Owned-platform matching uses TMDB's real provider_id (stored on
+// each pill's dataset by buildPlatformPill), not name-guessing.
 function markOwnedPlatforms(container) {
+    if (youCanWatchBadge) youCanWatchBadge.classList.add("hidden");
     const selected = new Set(getSelectedOtt());
     if (!selected.size || !container) return;
+    let firstOwnedName = "";
     container.querySelectorAll(".platform-pill").forEach((pill) => {
-        const img = pill.querySelector("img");
-        if (!img) return;
-        // We don't have the provider id on the pill DOM, so match loosely by
-        // logo URL id isn't available — instead match by visible name text.
-        const nameEl = pill.querySelector("span:last-child");
-        const name = nameEl ? nameEl.textContent : "";
-        const owned = OTT_PROVIDERS.some((p) => selected.has(p.id) && name.toLowerCase().includes(p.name.toLowerCase().split(" ")[0].toLowerCase()));
-        if (owned) pill.classList.add("on-your-service");
+        const id = Number(pill.dataset.providerId);
+        if (!selected.has(id)) return;
+        pill.classList.add("on-your-service");
+        if (!firstOwnedName) {
+            const nameEl = pill.querySelector("span:last-child");
+            firstOwnedName = nameEl ? nameEl.textContent : "";
+        }
     });
+    if (firstOwnedName && youCanWatchBadge) {
+        youCanWatchBadge.textContent = t("you_can_watch_badge", { provider: firstOwnedName });
+        youCanWatchBadge.classList.remove("hidden");
+    }
 }
 
 // --- Affiliate ticket link (BookMyShow-style deep link for in-theaters picks) ---

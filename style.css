@@ -190,6 +190,8 @@ body {
     position: relative;
     z-index: 2;
     width: min(360px, 100%);
+    max-height: min(560px, 88vh);
+    overflow-y: auto;
     background: var(--surface-2);
     border: 1px solid var(--pink);
     border-radius: 18px;
@@ -636,7 +638,7 @@ h1, h2, h3 {
     content: "";
     position: absolute;
     inset: 0;
-    opacity: 0.22;
+    opacity: 0.14;
     transition: opacity 0.2s ease;
 }
 
@@ -646,14 +648,53 @@ h1, h2, h3 {
     border-color: rgba(255,255,255,0.35);
     box-shadow: 0 10px 26px rgba(0,0,0,0.4);
 }
-.quick-action-card:hover::before { opacity: 0.34; }
+.quick-action-card:hover::before { opacity: 0.26; }
 
-.qa-icon {
-    font-size: 1.6rem;
-    line-height: 1;
-    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4));
+/* --- Icon badges: a proper glossy, gradient-filled circle behind a crisp
+   line-art SVG, instead of a flat emoji glyph sitting on the card. Gives
+   each quick-action card its own bold "app icon" look. --- */
+.qa-icon-badge {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     position: relative;
     z-index: 1;
+    box-shadow:
+        0 6px 14px rgba(0,0,0,0.4),
+        inset 0 1.5px 1.5px rgba(255,255,255,0.4),
+        inset 0 -8px 12px rgba(0,0,0,0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.qa-icon-badge::after {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    border-radius: 50%;
+    background: linear-gradient(155deg, rgba(255,255,255,0.6), rgba(255,255,255,0) 55%);
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.qa-icon-badge svg {
+    width: 22px;
+    height: 22px;
+    color: #fff;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
+    position: relative;
+    z-index: 1;
+}
+
+.quick-action-card:hover .qa-icon-badge,
+.quick-action-card:focus-visible .qa-icon-badge {
+    transform: scale(1.08) translateY(-1px);
+    box-shadow:
+        0 8px 18px rgba(0,0,0,0.45),
+        inset 0 1.5px 1.5px rgba(255,255,255,0.45),
+        inset 0 -8px 12px rgba(0,0,0,0.2);
 }
 
 .qa-label {
@@ -668,6 +709,11 @@ h1, h2, h3 {
 .qa-trending::before { background: linear-gradient(160deg, #ff6a3d, #ffd23f); }
 .qa-theaters::before { background: linear-gradient(160deg, #2fd6c0, #1f7ae0); }
 .qa-upcoming::before { background: linear-gradient(160deg, #a06bff, #4a2fd6); }
+
+.qa-watchparty .qa-icon-badge { background: linear-gradient(160deg, #ff2e88, #7b2ff7); }
+.qa-trending .qa-icon-badge { background: linear-gradient(160deg, #ff6a3d, #ffd23f); }
+.qa-theaters .qa-icon-badge { background: linear-gradient(160deg, #2fd6c0, #1f7ae0); }
+.qa-upcoming .qa-icon-badge { background: linear-gradient(160deg, #a06bff, #4a2fd6); }
 
 .qa-watchparty { border-color: rgba(255,46,136,0.45); }
 .qa-trending { border-color: rgba(255,210,63,0.45); }
@@ -2992,12 +3038,29 @@ h1, h2, h3 {
     margin-top: 6px;
 }
 
-/* --- OTT subscription chip selector --- */
-.ott-select-section { width: min(560px, 94vw); margin: 18px auto 4px; text-align: center; }
-.ott-select-heading { font-size: 12.5px; letter-spacing: 0.04em; opacity: 0.65; margin-bottom: 8px; text-transform: uppercase; }
-.ott-chip-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+/* --- OTT subscription checklist (lives in Settings, signed-in users only) --- */
+.settings-subs-section {
+    width: 100%;
+    margin-top: 6px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    text-align: left;
+}
+.settings-subs-heading {
+    font-size: 12.5px;
+    letter-spacing: 0.04em;
+    opacity: 0.7;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    color: var(--cream);
+}
+.ott-chip-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; }
+.ott-settings-status { font-size: 12.5px; opacity: 0.6; }
 .ott-chip {
-    padding: 7px 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px 6px 6px;
     border-radius: 999px;
     border: 1px solid rgba(255,255,255,0.14);
     background: rgba(255,255,255,0.04);
@@ -3005,6 +3068,12 @@ h1, h2, h3 {
     font-size: 12.5px;
     cursor: pointer;
     transition: all 0.2s ease;
+}
+.ott-chip img {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    object-fit: cover;
 }
 .ott-chip.selected {
     background: linear-gradient(100deg, var(--gold-bright), var(--pink-bright));
@@ -3017,6 +3086,32 @@ h1, h2, h3 {
 .platform-pill.on-your-service {
     outline: 2px solid var(--gold-bright);
     outline-offset: 1px;
+}
+
+/* Platform pills are now clickable links (opens the OTT's site) whenever we
+   recognize the provider — give them an obvious hover/tap affordance. */
+a.platform-pill {
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+a.platform-pill:hover,
+a.platform-pill:focus-visible {
+    transform: translateY(-1px);
+    border-color: rgba(255,255,255,0.3);
+}
+
+/* --- "You can watch this" banner: shown on a movie card when one of its
+   streaming platforms matches a subscription the signed-in user saved. --- */
+.you-can-watch-badge {
+    display: inline-block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #1a0a10;
+    background: linear-gradient(100deg, var(--gold-bright), var(--pink-bright));
+    padding: 6px 14px;
+    border-radius: 999px;
+    margin: 4px 0 10px;
 }
 
 /* --- Why You'll Like This badge --- */
