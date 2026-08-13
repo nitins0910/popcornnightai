@@ -1891,7 +1891,13 @@ h1, h2, h3 {
     position: fixed;
     top: 0;
     bottom: 0;
-    width: 170px;
+    /* Width now fills whatever gutter space is actually available next to
+       the container (instead of a fixed px value), so on wide/ultrawide
+       monitors the posters expand to use the side space rather than
+       floating in the middle of it and leaving a dead empty strip out to
+       the screen edge. Clamped so posters never get too cramped or, at
+       the other extreme, blown up unnaturally large. */
+    width: clamp(100px, calc(50vw - 500px - 40px), 260px);
     z-index: 1;
     overflow: hidden;
     pointer-events: none;
@@ -1900,12 +1906,12 @@ h1, h2, h3 {
     mask-image: linear-gradient(180deg, transparent 0%, black 12%, black 88%, transparent 100%);
 }
 
-/* Positioned relative to the container's actual edge (half its max-width +
-   a fixed gap) when there's room, otherwise falls back to a small fixed
-   margin from the viewport edge so the rail always stays fully on-screen
-   instead of being pushed off to the side on tighter laptop widths. */
-.poster-rail-left { left: max(16px, calc(50vw - 500px - 20px - 170px)); }
-.poster-rail-right { right: max(16px, calc(50vw - 500px - 20px - 170px)); }
+/* Anchored a small fixed margin from the true viewport edge — the rail's
+   own (now-responsive) width takes care of filling the rest of the gutter
+   up to the container, so this no longer needs the old calc() dance that
+   pushed a fixed-width rail away from a fixed point. */
+.poster-rail-left { left: 20px; }
+.poster-rail-right { right: 20px; }
 
 .poster-rail-track {
     display: flex;
@@ -1962,15 +1968,17 @@ h1, h2, h3 {
 @media (min-width: 1440px) {
     .container { max-width: 1140px; }
     .browse-grid { grid-template-columns: repeat(7, 1fr); }
-    .poster-rail { width: 190px; }
-    .poster-rail-left { left: max(16px, calc(50vw - 570px - 20px - 190px)); }
-    .poster-rail-right { right: max(16px, calc(50vw - 570px - 20px - 190px)); }
+    .poster-rail { width: clamp(120px, calc(50vw - 570px - 40px), 300px); }
 }
 
 @media (min-width: 1800px) {
-    .poster-rail { width: 220px; }
-    .poster-rail-left { left: max(20px, calc(50vw - 570px - 24px - 220px)); }
-    .poster-rail-right { right: max(20px, calc(50vw - 570px - 24px - 220px)); }
+    .poster-rail { width: clamp(140px, calc(50vw - 570px - 40px), 340px); }
+    .poster-rail-left { left: 24px; }
+    .poster-rail-right { right: 24px; }
+    /* Posters are noticeably taller at this width, so the loop covers more
+       pixels — nudge the duration up slightly to keep the scroll speed
+       feeling the same as the narrower tiers instead of visibly speeding up. */
+    .poster-rail-track { animation-duration: 66s; }
 }
 /* =========================================================
    AI MOVIE CHAT + EXPLAIN

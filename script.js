@@ -436,6 +436,7 @@ const TRANSLATIONS = {
 
         wishlist_heading: "💖 My Wishlist",
         wishlist_signin_required: "Sign in with Google to save and view your wishlist.",
+        wishlist_reconnect_hint: "⚠️ Sign in again to sync your latest wishlist from your other devices.",
         wishlist_empty: "Your wishlist is empty. Tap the 💖 on any movie to save it here.",
         wishlist_saved_toast: "Saved to your wishlist 💖",
         wishlist_removed_toast: "Removed from wishlist",
@@ -598,6 +599,7 @@ const TRANSLATIONS = {
 
         wishlist_heading: "💖 मेरी विशलिस्ट",
         wishlist_signin_required: "अपनी विशलिस्ट सेव और देखने के लिए Google से साइन इन करें।",
+        wishlist_reconnect_hint: "⚠️ दूसरे डिवाइस से नई विशलिस्ट सिंक करने के लिए दोबारा साइन इन करें।",
         wishlist_empty: "आपकी विशलिस्ट खाली है। किसी भी मूवी पर 💖 दबाकर उसे यहां सेव करें।",
         wishlist_saved_toast: "विशलिस्ट में सेव हो गया 💖",
         wishlist_removed_toast: "विशलिस्ट से हटा दिया गया",
@@ -1658,6 +1660,17 @@ async function openBrowseScreen(mode, regionCode, regionLabel, searchQuery) {
             return;
         }
         renderBrowseGrid(getWishlist(), "wishlist");
+        // Show whatever's local instantly, then pull anything added from
+        // another signed-in device (e.g. desktop) since we last synced —
+        // syncWishlistFromCloud() re-renders this grid itself if the merge
+        // brings in anything new. If there's no valid token right now
+        // (common after the ~1hr Google token expires), nudge the user to
+        // reconnect instead of silently staying stale.
+        if (getValidAccessToken()) {
+            syncWishlistFromCloud();
+        } else {
+            showMovieHomeToast(t("wishlist_reconnect_hint"));
+        }
         return;
     }
 
@@ -3536,20 +3549,21 @@ function restoreSavedGoogleSession() {
     if (currentUser && getValidAccessToken()) syncWishlistFromCloud();
 }
 
-// --- Google access token: kept in-memory + mirrored to sessionStorage so
-//     it survives a page refresh within the same browser tab (but never
-//     leaks to a new tab/device — that's expected; a fresh sign-in there
-//     is what triggers the cloud pull for that device). ---
+// --- Google access token: kept in-memory + mirrored to localStorage so it
+//     survives the token's full ~1hr lifetime even if the tab/app is closed
+//     and reopened (very common on mobile) — previously this used
+//     sessionStorage, which wiped the token the moment a tab closed, well
+//     before it actually expired, silently breaking cross-device sync. ---
 function storeGoogleAccessToken(token, expiresInSeconds) {
     googleAccessToken = { token, expiresAt: Date.now() + expiresInSeconds * 1000 - 60000 };
     try {
-        sessionStorage.setItem(GOOGLE_TOKEN_KEY, JSON.stringify(googleAccessToken));
+        localStorage.setItem(GOOGLE_TOKEN_KEY, JSON.stringify(googleAccessToken));
     } catch (e) {}
 }
 
 function restoreGoogleAccessToken() {
     try {
-        const saved = sessionStorage.getItem(GOOGLE_TOKEN_KEY);
+        const saved = localStorage.getItem(GOOGLE_TOKEN_KEY);
         if (saved) googleAccessToken = JSON.parse(saved);
     } catch (e) {}
 }
@@ -3665,6 +3679,19 @@ async function pushWishlistToCloud(list) {
         // Will simply retry on the next change, or reconcile at next sign-in.
     }
 }
+
+// Re-sync whenever this tab/app becomes visible again (app switch, unlock,
+// tab refocus) — not just right after sign-in — so items added on another
+// signed-in device (e.g. desktop) show up here without a manual re-login,
+// as long as this device's Google token hasn't expired yet.
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && currentUser && getValidAccessToken()) {
+        syncWishlistFromCloud();
+    }
+});
+window.addEventListener("focus", () => {
+    if (currentUser && getValidAccessToken()) syncWishlistFromCloud();
+});
 
 function signOutUser() {
     currentUser = null;
