@@ -240,6 +240,81 @@ body {
     border-color: var(--gold);
 }
 
+/* --- SETTINGS DRAWER: overrides the generic centered-popup layout above,
+   scoped to #settings-modal only, so Compare/Watch-Party (which share the
+   same base .settings-modal classes) keep their normal centered look. ---
+   Minimalist right-side bar: full viewport height, slides in from the
+   edge, no heavy border/glow — just a thin hairline and a flat surface. */
+.settings-drawer {
+    justify-content: flex-end;
+    align-items: stretch;
+    padding: 0;
+}
+
+.settings-drawer .settings-modal-backdrop {
+    background: rgba(5, 2, 10, 0.45);
+    backdrop-filter: blur(2px);
+}
+
+.settings-drawer-box {
+    width: min(300px, 86vw);
+    height: 100%;
+    max-height: 100vh;
+    margin: 0;
+    border-radius: 0;
+    border: none;
+    border-left: 1px solid rgba(255,255,255,0.1);
+    background: var(--void-2);
+    box-shadow: -18px 0 44px rgba(0,0,0,0.45);
+    padding: 26px 22px;
+    display: flex;
+    flex-direction: column;
+    animation: settingsDrawerIn 0.22s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes settingsDrawerIn {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+.settings-drawer-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: none;
+    border: 1px solid rgba(255,255,255,0.14);
+    color: var(--ink-soft);
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.settings-drawer-close:hover {
+    border-color: var(--gold);
+    color: var(--gold-bright);
+}
+
+.settings-drawer .settings-modal-title {
+    text-align: left;
+    font-family: var(--font-body);
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    font-size: 1.02rem;
+    color: var(--cream);
+    margin: 2px 34px 22px 0;
+}
+
+.settings-drawer .settings-row {
+    border-top: 1px solid rgba(255,255,255,0.07);
+    padding: 15px 0;
+}
+
 /* --- LIVE SEARCH UI --- */
 .search-container {
     position: relative;
@@ -1887,7 +1962,7 @@ h1, h2, h3 {
 
 /* --- Phone-width top bar de-clutter ---
    Trending/In-Theaters/Upcoming already have full-size equivalents as
-   quick-chips on the homescreen itself (#home-quick-chips), so on phones
+   quick-chips on the homescreen itself (#quick-actions-grid), so on phones
    they're dropped from the fixed corner bar entirely — that's what was
    crowding/overlapping there in the first place with 7+ icons fighting
    for ~340px of width. Search, Wishlist, Settings and the account button
@@ -2722,14 +2797,6 @@ h1, h2, h3 {
 }
 
 /* --- Homescreen: quick nav chips --- */
-.home-quick-chips {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 8px;
-    margin-top: 22px;
-}
-
 .home-chip {
     padding: 8px 14px;
     border-radius: 999px;

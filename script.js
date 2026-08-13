@@ -81,6 +81,9 @@ let currentUser = null; // { sub, name, email, picture }
 // scope, no 1-hour token expiry to worry about. See syncWishlistFromCloud()
 // / pushWishlistToCloud().
 const WISHLIST_API = `${TMDB_BASE_URL.replace("/3", "")}/wishlist`;
+// Same idea, for the "My Subscriptions" OTT checklist in Settings — see
+// syncOttSubsFromCloud() / pushOttSubsToCloud() further down.
+const OTTSUBS_API = `${TMDB_BASE_URL.replace("/3", "")}/ottsubs`;
 function wishlistStorageKey() {
     return currentUser ? `popcornnight_wishlist_${currentUser.sub}` : null;
 }
@@ -1006,7 +1009,6 @@ const wishlistCountBadge = document.getElementById("wishlist-count-badge");
 const resumeChip = document.getElementById("resume-chip");
 const resumeChipPoster = document.getElementById("resume-chip-poster");
 const resumeChipTitle = document.getElementById("resume-chip-title");
-const homeQuickChips = document.getElementById("home-quick-chips");
 
 const startSubtitleEl = document.getElementById("start-subtitle");
 
@@ -3656,6 +3658,7 @@ async function handleGoogleAuthRedirect() {
         // Worker KV) and reconcile with whatever's local here.
         syncWishlistFromCloud();
         syncLastMovieFromCloud();
+        syncOttSubsFromCloud();
         return true;
     } catch (e) {
         showMovieHomeToast("⚠️ Couldn't complete Google sign-in. Please try again.");
@@ -3676,6 +3679,7 @@ function restoreSavedGoogleSession() {
     if (currentUser) {
         syncWishlistFromCloud();
         syncLastMovieFromCloud();
+        syncOttSubsFromCloud();
     }
 }
 
@@ -3818,6 +3822,66 @@ async function syncLastMovieFromCloud() {
     }
 }
 
+// --- OTT subscriptions sync — same idea as the wishlist (union merge,
+//     nothing dropped from either side), stored in the SAME Worker KV
+//     under an "ottsubs:<sub>" key. See ottSubsStorageKey() / getSelectedOtt()
+//     / setSelectedOtt() above, which handle the local-storage half. ---
+let ottSubsSyncInFlight = false;
+
+async function fetchOttSubsFromServer(sub) {
+    const res = await fetch(`${OTTSUBS_API}/${encodeURIComponent(sub)}`);
+    if (res.status === 404) return [];
+    if (!res.ok) throw new Error("ottsubs-fetch-failed");
+    const data = await res.json();
+    return Array.isArray(data) ? data : Array.isArray(data.ottsubs) ? data.ottsubs : [];
+}
+
+async function pushOttSubsToServer(sub, ids) {
+    const res = await fetch(`${OTTSUBS_API}/${encodeURIComponent(sub)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ottsubs: ids })
+    });
+    if (!res.ok) throw new Error("ottsubs-push-failed");
+}
+
+// Fire-and-forget push, called after every local OTT subs change.
+async function pushOttSubsToCloud(ids) {
+    if (!currentUser) return;
+    try {
+        await pushOttSubsToServer(currentUser.sub, ids);
+    } catch (e) {
+        // Will simply retry on the next change, or reconcile at next sign-in.
+    }
+}
+
+// Pulls the cloud copy (if any), merges it with whatever's local on this
+// device (union by provider id), saves the merged result locally, re-renders
+// the Settings checklist if it's open, then pushes the merge back up so
+// both copies agree.
+async function syncOttSubsFromCloud() {
+    if (!currentUser || ottSubsSyncInFlight) return;
+    ottSubsSyncInFlight = true;
+    try {
+        const cloudIds = await fetchOttSubsFromServer(currentUser.sub);
+        const localIds = getSelectedOtt();
+
+        const merged = [...new Set([...localIds, ...(Array.isArray(cloudIds) ? cloudIds : [])])];
+
+        const key = ottSubsStorageKey();
+        if (key) {
+            try { localStorage.setItem(key, JSON.stringify(merged)); } catch (e) {}
+        }
+        renderOttSettingsSection();
+        await pushOttSubsToServer(currentUser.sub, merged);
+    } catch (e) {
+        // Offline or Worker hiccup — the local selection still works fine,
+        // we just skip syncing this time.
+    } finally {
+        ottSubsSyncInFlight = false;
+    }
+}
+
 // Re-sync whenever this tab/app becomes visible again (app switch, unlock,
 // tab refocus) — not just right after sign-in — so items added on another
 // signed-in device (e.g. desktop) show up here without a manual re-login.
@@ -3825,12 +3889,14 @@ document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && currentUser) {
         syncWishlistFromCloud();
         syncLastMovieFromCloud();
+        syncOttSubsFromCloud();
     }
 });
 window.addEventListener("focus", () => {
     if (currentUser) {
         syncWishlistFromCloud();
         syncLastMovieFromCloud();
+        syncOttSubsFromCloud();
     }
 });
 
@@ -4210,7 +4276,7 @@ function addToRecentlyViewed(movie) {
 
 function renderRecentlyViewedRail() {
     if (!homeRecentStrip || !homeRecentSection) return;
-    const list = getRecentlyViewed();
+    const list = getRecentlyViewed().slice(0, 10);
     if (!list.length) {
         homeRecentSection.classList.add("hidden");
         return;
@@ -4327,6 +4393,7 @@ function setSelectedOtt(ids) {
     const key = ottSubsStorageKey();
     if (!key) return;
     try { localStorage.setItem(key, JSON.stringify(ids)); } catch (e) {}
+    pushOttSubsToCloud(ids);
 }
 
 // Renders the "My Subscriptions" checklist inside Settings. The section
