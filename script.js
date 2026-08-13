@@ -50,7 +50,7 @@ const GEMINI_MODEL = "gemini-3.5-flash-lite";
 const GEMINI_URL = `${TMDB_BASE_URL.replace("/3", "")}/gemini/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const AI_TYPICAL_QUESTIONS = 5;
 const AI_MAX_QUESTIONS = 8;
-const AI_FETCH_TIMEOUT_MS = 20000;
+const AI_FETCH_TIMEOUT_MS = 30000;
 
 // -----------------------------------------------------------
 // 1c. GOOGLE SIGN-IN CONFIG (full-page redirect flow — no popup, no FedCM)
@@ -466,6 +466,7 @@ const TRANSLATIONS = {
         chip_watchparty: "🎉 Watch Party",
         settings_notif_label: "Notifications",
         mood_placeholder: "I feel like something slow and heartbreaking...",
+        mood_listening_placeholder: "Listening... speak your mood",
         mood_submit_btn: "Find it →",
         mood_error: "Couldn't quite place that mood — try describing it a bit differently.",
         recent_heading: "🕓 Recently Viewed",
@@ -643,6 +644,7 @@ const TRANSLATIONS = {
         chip_watchparty: "🎉 वॉच पार्टी",
         settings_notif_label: "नोटिफिकेशन",
         mood_placeholder: "मुझे कुछ धीमा और भावुक देखना है...",
+        mood_listening_placeholder: "सुन रहे हैं... अपना मूड बोलें",
         mood_submit_btn: "ढूंढो →",
         mood_error: "यह मूड समझ नहीं आया — थोड़ा अलग तरीके से बताएं।",
         recent_heading: "🕓 हाल ही में देखा",
@@ -848,6 +850,25 @@ const searchClearBtn = document.getElementById("search-clear-btn");
 const trendingBtn = document.getElementById("trending-btn");
 const theatersBtn = document.getElementById("theaters-btn");
 const upcomingBtn = document.getElementById("upcoming-btn");
+const upcomingFilters = document.getElementById("upcoming-filters");
+const upcomingMonthSelect = document.getElementById("upcoming-month-select");
+const upcomingIndustrySelect = document.getElementById("upcoming-industry-select");
+// 0 = rolling "next 30 days" (the app's original behaviour); 1-6 = that many
+// calendar months ahead of the current one.
+let upcomingMonthOffset = 0;
+// "all" | "bollywood" | "hollywood" | "south" — which industry's releases to
+// show in Coming Soon. See INDUSTRY_LANGS below for the language mapping.
+let upcomingIndustry = "all";
+const INDUSTRY_LANGS = {
+    bollywood: ["hi"],
+    hollywood: ["en"],
+    south: ["te", "ta", "ml", "kn"],
+};
+// Languages pulled separately (then merged) when no industry filter is
+// applied, so Coming Soon defaults to a healthy cross-industry mix instead
+// of whatever a single popularity/date-sorted query happens to surface —
+// which in practice under-represented Bollywood releases most weeks.
+const ALL_INDUSTRY_LANGS = ["hi", "en", "te", "ta", "ml", "kn"];
 const browseScreen = document.getElementById("browse-screen");
 const browseBackBtn = document.getElementById("browse-back-btn");
 const browseHeading = document.getElementById("browse-heading");
@@ -1092,15 +1113,42 @@ function getAudioCtx() {
             return null;
         }
     }
-    if (audioCtx.state === "suspended") {
-        audioCtx.resume().catch(() => {});
-    }
     return audioCtx;
 }
 
-function playTone({ freq = 880, duration = 0.06, type = "sine", startGain = 0.09, delay = 0 }) {
+// The old code called ctx.resume() and then scheduled sound immediately
+// without waiting for the (async) resume to actually finish. Most of the
+// time that race was harmless, but whenever the context had gone
+// "suspended" — which happens constantly on mobile: after the screen
+// locks, the tab loses focus, or simply after a few seconds of silence on
+// iOS Safari — the oscillator/buffer got scheduled on a context that
+// wasn't running yet, so the sound was silently dropped. That's exactly
+// the "sometimes the click/swipe sound plays, sometimes it doesn't"
+// behavior. Routing every sound through this helper guarantees the
+// context is actually running before anything gets scheduled on it.
+function withRunningAudioCtx(run) {
     const ctx = getAudioCtx();
     if (!ctx) return;
+    if (ctx.state === "running") {
+        run(ctx);
+        return;
+    }
+    ctx.resume().then(() => {
+        if (ctx.state === "running") run(ctx);
+    }).catch(() => {});
+}
+
+// iOS/Safari can suspend a running AudioContext as soon as the tab is
+// backgrounded (screen lock, app switch); resuming it proactively here
+// means the NEXT click/swipe sound after coming back doesn't silently
+// eat one interaction before it starts working again.
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && audioCtx && audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+    }
+});
+
+function playTone(ctx, { freq = 880, duration = 0.06, type = "sine", startGain = 0.09, delay = 0 }) {
     try {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -1116,72 +1164,72 @@ function playTone({ freq = 880, duration = 0.06, type = "sine", startGain = 0.09
 }
 
 function playClickSound() {
-    playTone({ freq: 640, duration: 0.045, type: "square", startGain: 0.05 });
+    withRunningAudioCtx((ctx) => playTone(ctx, { freq: 640, duration: 0.045, type: "square", startGain: 0.05 }));
 }
 
 function playClapSound() {
-    const ctx = getAudioCtx();
-    if (!ctx) return;
-    try {
-        const bufferSize = Math.floor(ctx.sampleRate * 0.15);
-        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            const decay = Math.pow(1 - i / bufferSize, 6);
-            data[i] = (Math.random() * 2 - 1) * decay;
-        }
-        const noise = ctx.createBufferSource();
-        noise.buffer = buffer;
-        const filter = ctx.createBiquadFilter();
-        filter.type = "bandpass";
-        filter.frequency.value = 1800;
-        const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.32, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.15);
-        noise.connect(filter);
-        filter.connect(gain);
-        gain.connect(ctx.destination);
-        noise.start();
-        playTone({ freq: 170, duration: 0.09, type: "square", startGain: 0.16, delay: 0.01 });
-    } catch (err) {}
+    withRunningAudioCtx((ctx) => {
+        try {
+            const bufferSize = Math.floor(ctx.sampleRate * 0.15);
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                const decay = Math.pow(1 - i / bufferSize, 6);
+                data[i] = (Math.random() * 2 - 1) * decay;
+            }
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+            const filter = ctx.createBiquadFilter();
+            filter.type = "bandpass";
+            filter.frequency.value = 1800;
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0.32, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.15);
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(ctx.destination);
+            noise.start();
+            playTone(ctx, { freq: 170, duration: 0.09, type: "square", startGain: 0.16, delay: 0.01 });
+        } catch (err) {}
+    });
 }
 
 function playSwipeSound(direction) {
-    const ctx = getAudioCtx();
-    if (!ctx) return;
-    try {
-        // Short filtered-noise "whoosh" with a pitch sweep — sweeps upward for
-        // a right swipe and downward for a left swipe, so the two directions
-        // feel distinct.
-        const duration = 0.22;
-        const bufferSize = Math.floor(ctx.sampleRate * duration);
-        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            const decay = Math.pow(1 - i / bufferSize, 2.2);
-            data[i] = (Math.random() * 2 - 1) * decay;
-        }
-        const noise = ctx.createBufferSource();
-        noise.buffer = buffer;
+    withRunningAudioCtx((ctx) => {
+        try {
+            // Short filtered-noise "whoosh" with a pitch sweep — sweeps upward
+            // for a right swipe and downward for a left swipe, so the two
+            // directions feel distinct.
+            const duration = 0.22;
+            const bufferSize = Math.floor(ctx.sampleRate * duration);
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                const decay = Math.pow(1 - i / bufferSize, 2.2);
+                data[i] = (Math.random() * 2 - 1) * decay;
+            }
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
 
-        const filter = ctx.createBiquadFilter();
-        filter.type = "bandpass";
-        filter.Q.value = 0.8;
-        const rising = direction === "right";
-        filter.frequency.setValueAtTime(rising ? 650 : 1500, ctx.currentTime);
-        filter.frequency.exponentialRampToValueAtTime(rising ? 2400 : 500, ctx.currentTime + duration);
+            const filter = ctx.createBiquadFilter();
+            filter.type = "bandpass";
+            filter.Q.value = 0.8;
+            const rising = direction === "right";
+            filter.frequency.setValueAtTime(rising ? 650 : 1500, ctx.currentTime);
+            filter.frequency.exponentialRampToValueAtTime(rising ? 2400 : 500, ctx.currentTime + duration);
 
-        const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.22, ctx.currentTime + 0.03);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.22, ctx.currentTime + 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
 
-        noise.connect(filter);
-        filter.connect(gain);
-        gain.connect(ctx.destination);
-        noise.start();
-        noise.stop(ctx.currentTime + duration + 0.02);
-    } catch (err) {}
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(ctx.destination);
+            noise.start();
+            noise.stop(ctx.currentTime + duration + 0.02);
+        } catch (err) {}
+    });
 }
 
 // Delegated click-sound for any button/interactive element across the app
@@ -1690,6 +1738,13 @@ async function openBrowseScreen(mode, regionCode, regionLabel, searchQuery) {
         t("trending_heading");
     browseTitleTag.textContent = mode === "theaters" ? "🎟️" : mode === "upcoming" ? "📅" : mode === "wishlist" ? "💖" : mode === "search" ? "🔍" : "🔥";
 
+    if (upcomingFilters) upcomingFilters.classList.toggle("hidden", mode !== "upcoming");
+    if (mode === "upcoming") {
+        populateUpcomingMonthOptions();
+        if (upcomingMonthSelect) upcomingMonthSelect.value = String(upcomingMonthOffset);
+        if (upcomingIndustrySelect) upcomingIndustrySelect.value = upcomingIndustry;
+    }
+
     const isTheaters = mode === "theaters";
     if (locationChangeBtn) {
         locationChangeBtn.classList.toggle("hidden", !isTheaters);
@@ -1750,22 +1805,18 @@ async function openBrowseScreen(mode, regionCode, regionLabel, searchQuery) {
     try {
         const langParam = TMDB_LANG_MAP[currentLang] || "en-US";
         const region = regionCode || getStoredRegion() || "IN";
-        let url;
 
-        if (mode === "theaters") {
-            url = `${TMDB_BASE_URL}/movie/now_playing?api_key=${TMDB_API_KEY}&language=${langParam}&region=${region}&page=1`;
-        } else if (mode === "upcoming") {
-            const today = new Date();
-            const in30Days = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
-            const gte = today.toISOString().slice(0, 10);
-            const lte = in30Days.toISOString().slice(0, 10);
-            url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&language=${langParam}&region=${region}&sort_by=primary_release_date.asc&primary_release_date.gte=${gte}&primary_release_date.lte=${lte}&with_release_type=2|3`;
+        if (mode === "upcoming") {
+            const { gte, lte } = getUpcomingDateRange(upcomingMonthOffset);
+            const movies = await fetchUpcomingMovies(region, langParam, gte, lte, upcomingIndustry);
+            renderBrowseGrid(movies, mode);
         } else {
-            url = `${TMDB_BASE_URL}/trending/movie/week?api_key=${TMDB_API_KEY}&language=${langParam}&page=1`;
+            const url = mode === "theaters"
+                ? `${TMDB_BASE_URL}/movie/now_playing?api_key=${TMDB_API_KEY}&language=${langParam}&region=${region}&page=1`
+                : `${TMDB_BASE_URL}/trending/movie/week?api_key=${TMDB_API_KEY}&language=${langParam}&page=1`;
+            const data = await cachedFetchJson(url);
+            renderBrowseGrid(data.results || [], mode);
         }
-
-        const data = await cachedFetchJson(url);
-        renderBrowseGrid(data.results || [], mode);
     } catch (err) {
         browseError.textContent = t("browse_error");
         browseError.classList.remove("hidden");
@@ -1840,6 +1891,7 @@ function renderBrowseGrid(movies, mode) {
         if (cardExplainBtn) {
             cardExplainBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
+                unlockAudioPlayback();
                 explainBrowseCard(movie, cardExplainBtn);
             });
         }
@@ -2041,6 +2093,98 @@ if (locationChangeBtn) {
 trendingBtn.addEventListener("click", () => openBrowseScreen("trending"));
 theatersBtn.addEventListener("click", theatersBtnHandler);
 if (upcomingBtn) upcomingBtn.addEventListener("click", () => openBrowseScreen("upcoming"));
+
+function populateUpcomingMonthOptions() {
+    if (!upcomingMonthSelect || upcomingMonthSelect.dataset.populated) return;
+    const frag = document.createDocumentFragment();
+    const optNow = document.createElement("option");
+    optNow.value = "0";
+    optNow.textContent = "📅 Next 30 Days";
+    frag.appendChild(optNow);
+    const today = new Date();
+    for (let i = 1; i <= 6; i++) {
+        const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+        const opt = document.createElement("option");
+        opt.value = String(i);
+        opt.textContent = d.toLocaleDateString(currentLang === "hi" ? "hi-IN" : undefined, { month: "long", year: "numeric" });
+        frag.appendChild(opt);
+    }
+    upcomingMonthSelect.appendChild(frag);
+    upcomingMonthSelect.dataset.populated = "true";
+}
+
+if (upcomingMonthSelect) {
+    upcomingMonthSelect.addEventListener("change", () => {
+        upcomingMonthOffset = parseInt(upcomingMonthSelect.value, 10) || 0;
+        openBrowseScreen("upcoming");
+    });
+}
+if (upcomingIndustrySelect) {
+    upcomingIndustrySelect.addEventListener("change", () => {
+        upcomingIndustry = upcomingIndustrySelect.value;
+        openBrowseScreen("upcoming");
+    });
+}
+
+// Returns the {gte, lte} TMDB date-filter range for the selected Coming
+// Soon month: either the rolling next-30-days window, or the full first-to-
+// last day span of a specific future calendar month.
+function getUpcomingDateRange(monthOffset) {
+    const today = new Date();
+    if (!monthOffset) {
+        const in30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+        return { gte: today.toISOString().slice(0, 10), lte: in30.toISOString().slice(0, 10) };
+    }
+    const start = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+    const end = new Date(today.getFullYear(), today.getMonth() + monthOffset + 1, 0); // last day of that month
+    return { gte: start.toISOString().slice(0, 10), lte: end.toISOString().slice(0, 10) };
+}
+
+// Fetches Coming Soon results. A single date-sorted /discover/movie query
+// (the app's original approach) tends to bury Bollywood and South Indian
+// releases under whichever industry TMDB's default ordering favors that
+// week — so instead of one query, this pulls each industry's releases as
+// its own query and merges them, guaranteeing every industry that has a
+// release in the window actually shows up.
+async function fetchUpcomingMovies(region, langParam, gte, lte, industry) {
+    const discoverUrl = (lang, page) =>
+        `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&language=${langParam}&region=${region}` +
+        `&sort_by=primary_release_date.asc&primary_release_date.gte=${gte}&primary_release_date.lte=${lte}` +
+        `&with_release_type=2|3&page=${page}` +
+        (lang ? `&with_original_language=${lang}` : "");
+
+    if (industry && industry !== "all") {
+        const langs = INDUSTRY_LANGS[industry] || [];
+        const requests = [];
+        langs.forEach((lang) => {
+            requests.push(cachedFetchJson(discoverUrl(lang, 1)));
+            requests.push(cachedFetchJson(discoverUrl(lang, 2)));
+        });
+        const settled = await Promise.allSettled(requests);
+        let merged = [];
+        settled.forEach((r) => { if (r.status === "fulfilled") merged.push(...(r.value.results || [])); });
+        const seen = new Set();
+        merged = merged.filter((m) => (seen.has(m.id) ? false : (seen.add(m.id), true)));
+        merged.sort((a, b) => (a.release_date || "").localeCompare(b.release_date || ""));
+        return merged;
+    }
+
+    // No filter: pull a fair share from each industry so the mixed grid
+    // reflects what's actually releasing everywhere, not just what one
+    // popularity-sorted query would have surfaced.
+    const settled = await Promise.allSettled(ALL_INDUSTRY_LANGS.map((lang) => cachedFetchJson(discoverUrl(lang, 1))));
+    const PER_BUCKET_CAP = 8;
+    const merged = [];
+    const seen = new Set();
+    settled.forEach((r) => {
+        if (r.status !== "fulfilled") return;
+        (r.value.results || []).slice(0, PER_BUCKET_CAP).forEach((m) => {
+            if (!seen.has(m.id)) { seen.add(m.id); merged.push(m); }
+        });
+    });
+    merged.sort((a, b) => (a.release_date || "").localeCompare(b.release_date || ""));
+    return merged;
+}
 browseBackBtn.addEventListener("click", () => showScreen(startScreen));
 
 // -----------------------------------------------------------
@@ -3082,6 +3226,31 @@ const GEMINI_TTS_VOICE = "Kore"; // warm, natural narrator voice
 const GEMINI_TTS_URL = `${TMDB_BASE_URL.replace("/3", "")}/gemini/v1beta/models/${GEMINI_TTS_MODEL}:generateContent`;
 
 let currentTTSAudio = null;
+let audioPlaybackUnlocked = false;
+
+// Browsers only allow audio.play() to start without restriction inside (or
+// very shortly after) a real user gesture. "Explain" plays its FIRST
+// sentence only after an await chain — Gemini text streaming, then a TTS
+// fetch — which on iOS Safari and increasingly Chrome/Android is enough
+// delay for the tap to no longer count as "the gesture" that authorized
+// playback. speakWithGeminiTTS() already swallows that failure silently
+// (so narration doesn't crash), so the visible symptom was just: the
+// Explain button cycles through loading → idle and nothing is ever heard.
+// Playing (and instantly pausing) a silent clip SYNCHRONOUSLY inside the
+// click handler, before any awaits, "unlocks" audio playback for the rest
+// of the page session on every browser that needs this trick.
+function unlockAudioPlayback() {
+    if (audioPlaybackUnlocked) return;
+    try {
+        const silence = new Audio(
+            "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA="
+        );
+        silence.play().then(() => {
+            silence.pause();
+            audioPlaybackUnlocked = true;
+        }).catch(() => {});
+    } catch (err) {}
+}
 
 // Gemini TTS returns raw 16-bit PCM audio (24kHz, mono) with no file header.
 // Wrapping it in a standard WAV header lets a plain <audio> element play it.
@@ -3502,7 +3671,10 @@ function appendExplainError() {
 }
 
 if (movieExplainBtn) {
-    movieExplainBtn.addEventListener("click", () => explainMovie(state && state.currentMovie));
+    movieExplainBtn.addEventListener("click", () => {
+        unlockAudioPlayback();
+        explainMovie(state && state.currentMovie);
+    });
 }
 
 // Per-card variant used by the small "Explain" icon on browse/trending grid
@@ -4356,6 +4528,63 @@ if (moodInput) {
     moodInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter") handleMoodSubmit();
     });
+}
+
+// --- Voice input for the mood box (Web Speech API) ---
+const moodMicBtn = document.getElementById("mood-mic-btn");
+const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+let moodRecognition = null;
+let moodListening = false;
+
+if (moodMicBtn) {
+    if (!SpeechRecognitionCtor) {
+        // No browser support (e.g. some desktop Firefox builds) — hide the
+        // mic rather than show a button that can never work.
+        moodMicBtn.classList.add("hidden");
+    } else {
+        moodMicBtn.addEventListener("click", () => {
+            unlockAudioPlayback();
+            if (moodListening) {
+                if (moodRecognition) moodRecognition.stop();
+                return;
+            }
+            hapticFeedback(10);
+            moodRecognition = new SpeechRecognitionCtor();
+            moodRecognition.lang = TMDB_LANG_MAP[currentLang] || "en-US";
+            moodRecognition.interimResults = true;
+            moodRecognition.maxAlternatives = 1;
+
+            moodRecognition.onstart = () => {
+                moodListening = true;
+                moodMicBtn.classList.add("is-listening");
+                if (moodInput) moodInput.placeholder = t("mood_listening_placeholder") || "Listening...";
+            };
+            moodRecognition.onresult = (e) => {
+                let transcript = "";
+                for (let i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
+                if (moodInput) moodInput.value = transcript;
+            };
+            moodRecognition.onerror = () => {
+                moodListening = false;
+                moodMicBtn.classList.remove("is-listening");
+            };
+            moodRecognition.onend = () => {
+                moodListening = false;
+                moodMicBtn.classList.remove("is-listening");
+                if (moodInput) moodInput.placeholder = t("mood_placeholder");
+                // If speech actually produced text, go straight to results —
+                // saves an extra tap after speaking the whole sentence.
+                if (moodInput && moodInput.value.trim()) handleMoodSubmit();
+            };
+
+            try {
+                moodRecognition.start();
+            } catch (err) {
+                moodListening = false;
+                moodMicBtn.classList.remove("is-listening");
+            }
+        });
+    }
 }
 
 // --- OTT-aware filtering (subscription checklist, lives in Settings and

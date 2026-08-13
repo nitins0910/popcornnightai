@@ -19,7 +19,7 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@500&family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@500&family=Dancing+Script:wght@600;700&family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -43,8 +43,8 @@
 
     <div class="top-left-actions">
         <button id="brand-home-btn" class="brand-logo-btn" aria-label="PopcornNight.ai — Go to homepage">
-            <span class="brand-logo-mark">🍿</span>
-            <span class="brand-logo-text">PopcornNight.ai</span>
+            <img class="brand-logo-icon" src="./brand-icon.png" width="75" height="75" alt="" aria-hidden="true">
+            <span class="brand-logo-text">PopcornNight<span class="brand-logo-text-ai">.ai</span></span>
         </button>
         <button id="home-btn" class="nav-btn home-btn hidden" aria-label="Home">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -142,18 +142,38 @@
             <p class="eyebrow" id="start-eyebrow">🎬 Now Screening</p>
             <h1 id="start-title">🎬 What's The Move Tonight?</h1>
             <p id="start-subtitle">Bored? Vibing? Emotionally unstable? 😭<br>Answer a few questions and let us cook your perfect movie pick.</p>
-            <p id="app-purpose-blurb">PopcornNight AI is a free movie-recommendation app. Take a short AI-powered
-                mood quiz to get a personalized pick, browse trending and now-playing movies, watch
-                trailers, and save favorites to a Wishlist that syncs across your devices when you
-                sign in with Google.</p>
+
+            <div id="mood-hero" class="mood-hero">
+                <div id="mood-box" class="mood-box">
+                    <span class="mood-box-shine" aria-hidden="true"></span>
+                    <span class="mood-box-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"></path>
+                        </svg>
+                    </span>
+                    <input type="text" id="mood-input" class="mood-input" placeholder="I feel like something slow and heartbreaking..." autocomplete="off">
+                    <button type="button" id="mood-mic-btn" class="mood-mic-btn" aria-label="Speak your mood">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="9" y="2" width="6" height="12" rx="3"></rect>
+                            <path d="M5 10a7 7 0 0 0 14 0"></path>
+                            <line x1="12" y1="19" x2="12" y2="22"></line>
+                            <line x1="8" y1="22" x2="16" y2="22"></line>
+                        </svg>
+                    </button>
+                    <button id="mood-submit-btn" class="mood-submit-btn" aria-label="Find a movie for this mood">Go</button>
+                </div>
+                <p id="mood-error" class="mood-error hidden"></p>
+            </div>
 
             <div id="film-reel-strip" class="film-reel-strip" aria-hidden="true">
                 <div id="film-reel-track" class="film-reel-track"></div>
             </div>
 
+            <div class="hero-divider" aria-hidden="true"><span>or</span></div>
+
             <div class="start-actions">
-                <button id="start-btn" class="btn ticket-btn">Let's Cook 🔥</button>
-                <button id="random-btn" class="btn secondary wildcard-btn">Random Drop 🎲</button>
+                <button id="start-btn" class="btn ticket-btn home-hero-btn">Let's Cook 🔥</button>
+                <button id="random-btn" class="btn secondary wildcard-btn home-hero-btn">Random Drop 🎲</button>
             </div>
 
             <div id="quick-actions-grid" class="quick-actions-grid">
@@ -199,26 +219,15 @@
                 </button>
             </div>
 
-            <div id="resume-chip" class="resume-chip hidden">
-                <img id="resume-chip-poster" class="resume-chip-poster" src="" alt="">
-                <div class="resume-chip-text">
-                    <span class="resume-chip-label">Continue with</span>
-                    <span id="resume-chip-title" class="resume-chip-title"></span>
-                </div>
-                <span class="resume-chip-arrow">→</span>
-            </div>
-
-            <div id="mood-box" class="mood-box">
-                <span class="mood-box-icon" aria-hidden="true">✨</span>
-                <input type="text" id="mood-input" class="mood-input" placeholder="I feel like something slow and heartbreaking..." autocomplete="off">
-                <button id="mood-submit-btn" class="mood-submit-btn" aria-label="Find a movie for this mood">Find it →</button>
-            </div>
-            <p id="mood-error" class="mood-error hidden"></p>
-
             <div id="home-recently-viewed-section" class="home-trending-section hidden">
                 <div class="home-trending-heading" id="home-recent-heading">🕓 Recently Viewed</div>
                 <div id="home-recent-strip" class="home-trending-strip"></div>
             </div>
+
+            <p id="app-purpose-blurb">PopcornNight AI is a free movie-recommendation app. Take a short AI-powered
+                mood quiz to get a personalized pick, browse trending and now-playing movies, watch
+                trailers, and save favorites to a Wishlist that syncs across your devices when you
+                sign in with Google.</p>
         </div>
 
         <div id="quiz-screen" class="screen hidden">
@@ -365,6 +374,15 @@
                 </div>
             </div>
             <h2 id="browse-heading">🔥 Trending Now</h2>
+            <div id="upcoming-filters" class="upcoming-filters hidden">
+                <select id="upcoming-month-select" class="upcoming-select" aria-label="Select month"></select>
+                <select id="upcoming-industry-select" class="upcoming-select" aria-label="Filter by industry">
+                    <option value="all">🌍 All Industries</option>
+                    <option value="bollywood">🇮🇳 Bollywood</option>
+                    <option value="hollywood">🇺🇸 Hollywood</option>
+                    <option value="south">🎞️ South Indian</option>
+                </select>
+            </div>
             <div id="browse-grid" class="browse-grid"></div>
             <p id="browse-loading" class="browse-loading hidden">Rounding up the picks…</p>
             <p id="browse-error" class="error-message hidden"></p>
